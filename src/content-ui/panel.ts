@@ -15,8 +15,9 @@ import {
   delayRangeMs,
   type Settings,
 } from '../core/settings';
-import { progress } from '../core/task';
+import { progress, type FollowUser } from '../core/task';
 import type { UiSnapshot } from './controller';
+import { PANEL_CSS } from './styles';
 
 export interface PanelActions {
   onToggle(mid: number): void;
@@ -38,67 +39,46 @@ export interface PanelActions {
   onChangeSettings(settings: Settings): void;
 }
 
-const CSS = `
-:host { all: initial; }
-.panel {
-  position: fixed; top: 72px; right: 16px; bottom: 16px; width: 360px;
-  display: flex; flex-direction: column; background: #fff; color: #18191c;
-  border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.24);
-  font: 13px/1.6 system-ui, -apple-system, "Microsoft YaHei", sans-serif;
-  z-index: 2147483000; overflow: hidden;
+type IconName =
+  | 'mark'
+  | 'x'
+  | 'gear'
+  | 'lock'
+  | 'unlock'
+  | 'check'
+  | 'back'
+  | 'play'
+  | 'pause'
+  | 'stop'
+  | 'retry'
+  | 'download'
+  | 'clock'
+  | 'shield';
+
+const ICONS: Record<IconName, string> = {
+  mark: '<path d="M4 6h11M4 12h7M4 18h5"/><path d="m17.6 3.4.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  gear: '<path d="M5 8.5h8M18.5 8.5H19M5 15.5h3.5M12 15.5h7"/><circle cx="15.5" cy="8.5" r="2.1"/><circle cx="10.5" cy="15.5" r="2.1"/>',
+  lock: '<rect x="4.6" y="10.4" width="14.8" height="9.6" rx="2.6"/><path d="M8.2 10.4V8a3.8 3.8 0 0 1 7.6 0v2.4"/>',
+  unlock: '<rect x="4.6" y="10.4" width="14.8" height="9.6" rx="2.6"/><path d="M8.2 10.4V8a3.8 3.8 0 0 1 7.3-1.6"/>',
+  check: '<path d="m5 12.6 4.6 4.6L19 7.4"/>',
+  back: '<path d="M14 6l-6 6 6 6"/>',
+  play: '<path d="M8.5 5.6v12.8L19 12z"/>',
+  pause: '<path d="M9.2 5.6v12.8M14.8 5.6v12.8"/>',
+  stop: '<rect x="6.6" y="6.6" width="10.8" height="10.8" rx="2.4"/>',
+  retry: '<path d="M19.6 12a7.6 7.6 0 1 1-2.5-5.6"/><path d="M19.8 4.4v4.4h-4.4"/>',
+  download: '<path d="M12 4.4v9.8m0 0 3.8-3.8M12 14.2 8.2 10.4"/><path d="M5.2 18.4h13.6"/>',
+  clock: '<circle cx="12" cy="12" r="7.8"/><path d="M12 8.2v4.3l3 1.8"/>',
+  shield: '<path d="M12 4.4 19 6.9v5c0 4.4-2.9 7.2-7 8.4-4.1-1.2-7-4-7-8.4v-5z"/>',
+};
+
+interface ButtonOpts {
+  variant?: 'primary' | 'ghost' | 'danger';
+  size?: 'sm';
+  icon?: IconName;
+  title?: string;
+  block?: boolean;
 }
-header { display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
-.title { font-weight: 600; }
-button { cursor: pointer; border: 1px solid #d0d5dd; background: #fff; color: inherit;
-  border-radius: 8px; padding: 6px 12px; font: inherit; }
-button:hover:not(:disabled) { border-color: #fb7299; color: #fb7299; }
-button:disabled { opacity: .5; cursor: default; }
-button.primary { background: #fb7299; border-color: #fb7299; color: #fff; }
-button.primary:hover:not(:disabled) { background: #e5648a; color: #fff; }
-.close { border: none; font-size: 18px; padding: 2px 8px; }
-main { flex: 1; overflow: auto; padding: 12px 16px; }
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-.count { margin-left: auto; color: #61666d; }
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 8px 4px; border: 1px solid #e5e7eb; border-radius: 10px; cursor: pointer; }
-.card.selected { border-color: #fb7299; background: #fff5f8; }
-.card.excluded { cursor: default; background: #fafbfc; }
-.card.excluded .name, .card.excluded .initial { opacity: .6; }
-.badge { position: absolute; top: 4px; left: 4px; font-size: 11px; line-height: 1;
-  padding: 2px 4px; border-radius: 6px; background: #fff1e6; color: #d97706; }
-.lock { position: absolute; top: 2px; right: 2px; border: none; background: transparent;
-  padding: 2px 4px; font-size: 13px; line-height: 1; }
-.lock:disabled { opacity: 1; cursor: default; }
-.card img, .initial { width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
-  display: flex; align-items: center; justify-content: center; background: #f1f2f3; font-weight: 600; }
-.name { width: 100%; text-align: center; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; font-size: 12px; }
-.actions { display: flex; gap: 8px; margin-top: 12px; }
-.actions button { flex: 1; }
-.muted { color: #61666d; }
-.message { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: #fff7e6; color: #9a6700; }
-.bar { height: 8px; border-radius: 4px; background: #f1f2f3; overflow: hidden; margin: 10px 0; }
-.bar > i { display: block; height: 100%; background: #fb7299; }
-.stats { display: flex; justify-content: space-between; color: #61666d; }
-.failed { max-height: 160px; overflow: auto; margin-top: 8px; }
-.failed div { padding: 2px 0; }
-.hint { margin-top: 10px; color: #9499a0; font-size: 12px; }
-.tag { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 999px;
-  background: #fff5f8; color: #fb7299; font-size: 12px; }
-.icon { border: none; padding: 2px 6px; }
-.setting { margin-bottom: 14px; }
-.setting .label, .section .label { display: block; font-weight: 600; margin-bottom: 6px; }
-.choices { display: flex; gap: 8px; flex-wrap: wrap; }
-.choices button.on, .toolbar button.on { border-color: #fb7299; color: #fb7299; background: #fff5f8; }
-.row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
-.row input[type="number"] { width: 84px; padding: 4px 6px; border: 1px solid #d0d5dd;
-  border-radius: 6px; font: inherit; }
-.section { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
-.backup-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
-.backup-row .grow { flex: 1; color: #61666d; font-size: 12px; }
-`;
 
 function h(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
@@ -107,12 +87,125 @@ function h(tag: string, className?: string, text?: string): HTMLElement {
   return node;
 }
 
-function button(label: string, onClick: () => void, primary = false): HTMLButtonElement {
+function icon(name: IconName, size = 15): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.7');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = ICONS[name];
+  return svg;
+}
+
+function button(label: string, onClick: () => void, opts: ButtonOpts = {}): HTMLButtonElement {
   const node = document.createElement('button');
-  node.textContent = label;
-  if (primary) node.className = 'primary';
+  node.type = 'button';
+  node.className = `btn${opts.variant ? ` ${opts.variant}` : ''}${
+    opts.size === 'sm' ? ' sm' : ''
+  }${opts.block ? ' block' : ''}`;
+  if (opts.title) node.title = opts.title;
+  if (opts.icon) node.append(icon(opts.icon, opts.size === 'sm' ? 13 : 15));
+  if (label) node.append(h('span', '', label));
   node.addEventListener('click', onClick);
   return node;
+}
+
+function iconButton(name: IconName, label: string, onClick: () => void): HTMLButtonElement {
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = 'icon-btn';
+  node.title = label;
+  node.setAttribute('aria-label', label);
+  node.append(icon(name, 16));
+  node.addEventListener('click', onClick);
+  return node;
+}
+
+function chip(
+  label: string,
+  active: boolean,
+  onClick: () => void,
+  count?: number,
+  disabled = false,
+): HTMLButtonElement {
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = 'chip';
+  node.setAttribute('aria-pressed', String(active));
+  node.disabled = disabled;
+  node.append(h('span', '', label));
+  if (count !== undefined) {
+    node.append(h('b', '', String(count)));
+  }
+  node.addEventListener('click', onClick);
+  return node;
+}
+
+function activate(node: HTMLElement, onActivate: () => void): void {
+  node.setAttribute('role', 'button');
+  node.tabIndex = 0;
+  node.addEventListener('click', onActivate);
+  node.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onActivate();
+    }
+  });
+}
+
+function avatar(user: Pick<FollowUser, 'uname' | 'face'>): HTMLElement {
+  const wrap = h('div', 'face-wrap');
+  if (user.face) {
+    const img = document.createElement('img');
+    img.className = 'face';
+    img.src = user.face;
+    img.loading = 'lazy';
+    img.alt = '';
+    wrap.append(img);
+  } else {
+    wrap.append(h('span', 'face-txt', (user.uname || '?').slice(0, 1)));
+  }
+  return wrap;
+}
+
+function note(text: string, kind: 'brand' | 'warn' | 'ok' = 'brand', name?: IconName): HTMLElement {
+  const node = h('div', `note${kind === 'brand' ? '' : ` ${kind}`}`);
+  if (name) node.append(icon(name, 14));
+  node.append(h('div', '', text));
+  return node;
+}
+
+function tile(label: string, value: number, warn = false): HTMLElement {
+  const node = h('div', `tile${warn ? ' warn' : ''}`);
+  node.append(h('b', '', String(value)), h('span', '', label));
+  return node;
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) {
+    return `${seconds} 秒`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} 分钟`;
+  }
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+}
+
+function etaMs(snapshot: UiSnapshot): number | null {
+  const stats = progress(snapshot.task);
+  if (stats.remaining <= 0) {
+    return null;
+  }
+  const interval = snapshot.slowMode ? 'conservative' : snapshot.settings.interval;
+  const { min, max } = delayRangeMs(interval);
+  return stats.remaining * ((min + max) / 2);
 }
 
 export function createPanel(actions: PanelActions) {
@@ -120,20 +213,26 @@ export function createPanel(actions: PanelActions) {
   host.id = 'bfc-panel-host';
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
-  style.textContent = CSS;
+  style.textContent = PANEL_CSS;
+
   const panel = h('div', 'panel');
-  const header = h('header');
-  header.append(h('span', 'title', '关注列表整理工具'));
-  const settingsButton = button('设置', () => {
+  const header = h('header', 'hd');
+  const mark = h('div', 'mark');
+  mark.append(icon('mark', 17));
+  const titles = h('div', 'titles');
+  titles.append(h('div', 'kicker', 'follow list cleaner'));
+  titles.append(h('div', 'title', '关注列表整理工具'));
+  const settingsButton = iconButton('gear', '设置', () => {
     showSettings = !showSettings;
     if (lastSnapshot) {
       render(lastSnapshot);
     }
   });
-  settingsButton.classList.add('icon');
-  const closeButton = button('×', actions.onClose);
-  closeButton.classList.add('close');
-  header.append(settingsButton, closeButton);
+  const closeButton = iconButton('x', '关闭面板', () => actions.onClose());
+  const headerActions = h('div', 'hd-actions');
+  headerActions.append(settingsButton, closeButton);
+  header.append(mark, titles, headerActions);
+
   const main = h('main');
   panel.append(header, main);
   shadow.append(style, panel);
@@ -142,282 +241,10 @@ export function createPanel(actions: PanelActions) {
   let visibleCount = 200;
   let showSettings = false;
   let lastSnapshot: UiSnapshot | null = null;
+  let lastViewKey = '';
   let onlyDeactivated = false;
   let onlyGroup: number | null = null;
   const unprotectArmed = new Set<number>();
-
-  function renderGrid(snapshot: UiSnapshot, users: UiSnapshot['users']) {
-    const grid = h('div', 'grid');
-    for (const user of users.slice(0, visibleCount)) {
-      const excluded = snapshot.exclusion.excludedMids.has(user.mid);
-      const card = h(
-        'div',
-        `card${snapshot.selected.has(user.mid) ? ' selected' : ''}${excluded ? ' excluded' : ''}`,
-      );
-      if (snapshot.exclusion.protectedMids.has(user.mid)) {
-        card.append(h('span', 'badge', '🔒'));
-      } else if (snapshot.exclusion.recentMids.has(user.mid)) {
-        card.append(h('span', 'badge', '新'));
-      }
-      const manual = snapshot.protectedList.some((item) => item.mid === user.mid);
-      const special = isSpecialFollow(user);
-      const lock = button(manual || special ? '🔒' : '🔓', () => actions.onProtect(user.mid));
-      lock.classList.add('lock');
-      lock.disabled = manual || special;
-      lock.title =
-        special && !manual
-          ? 'B 站「特别关注」分组，取消特别关注后自动解除'
-          : manual
-            ? '已在保护名单；如需解除请到设置页'
-            : '加入保护名单（永不被选中）';
-      card.append(lock);
-      if (user.face) {
-        const img = document.createElement('img');
-        img.src = user.face;
-        img.loading = 'lazy';
-        img.alt = '';
-        card.append(img);
-      } else {
-        card.append(h('span', 'initial', (user.uname || '?').slice(0, 1)));
-      }
-      card.append(h('span', 'name', user.uname || '(已注销)'));
-      card.addEventListener('click', () => actions.onToggle(user.mid));
-      grid.append(card);
-    }
-    return grid;
-  }
-
-  function render(snapshot: UiSnapshot) {
-    lastSnapshot = snapshot;
-    main.textContent = '';
-    if (showSettings) {
-      renderSettings(snapshot);
-      return;
-    }
-    if (snapshot.phase === 'selecting') {
-      visibleCount = Math.max(visibleCount, 200);
-    }
-    if (snapshot.message) {
-      main.append(h('div', 'message', snapshot.message));
-    }
-
-    if (snapshot.phase === 'loading') {
-      const loaded = snapshot.loadProgress?.loaded ?? 0;
-      const total = snapshot.loadProgress?.total ?? 0;
-      main.append(h('div', 'muted', total > 0 ? `正在读取关注列表 ${loaded}/${total}…` : '正在读取关注列表…'));
-      return;
-    }
-
-    if (snapshot.phase === 'login') {
-      main.append(h('div', '', '未检测到 B 站登录状态，请先登录后重新点击扩展图标。'));
-      const row = h('div', 'actions');
-      row.append(
-        button('打开登录页', () => {
-          window.open('https://passport.bilibili.com/login', '_blank');
-        }, true),
-      );
-      main.append(row);
-      return;
-    }
-
-    if (snapshot.phase === 'error') {
-      const row = h('div', 'actions');
-      row.append(button('重试', actions.onReload, true));
-      main.append(row);
-      return;
-    }
-
-    if (snapshot.phase === 'resume' && snapshot.resume) {
-      main.append(
-        h(
-          'div',
-          '',
-          `上次清理没有完成：计划 ${snapshot.resume.total} 个，已完成 ${snapshot.resume.succeeded} 个。`,
-        ),
-      );
-      main.append(
-        h(
-          'div',
-          'muted',
-          `继续将处理剩余 ${snapshot.resume.total - snapshot.resume.succeeded} 个账号，已完成的不会重复处理。`,
-        ),
-      );
-      const row = h('div', 'actions');
-      row.append(button('暂不继续', actions.onDismissResume));
-      row.append(button('继续清理', actions.onResumeTask, true));
-      main.append(row);
-      return;
-    }
-
-    if (snapshot.phase === 'selecting') {
-      if (onlyGroup !== null && !snapshot.groups.some((group) => group.tagId === onlyGroup)) {
-        onlyGroup = null;
-      }
-      const filtered = snapshot.users.filter(
-        (user) =>
-          (!onlyDeactivated || !user.uname) &&
-          (onlyGroup === null || user.tags?.includes(onlyGroup) === true),
-      );
-      const isFiltered = onlyDeactivated || onlyGroup !== null;
-      if (snapshot.exclusion.recentCount > 0) {
-        main.append(
-          h(
-            'div',
-            'hint',
-            `最近 ${snapshot.settings.recentDays} 天关注的 ${snapshot.exclusion.recentCount} 个已跳过（可在设置中调整）。`,
-          ),
-        );
-      }
-      const toolbar = h('div', 'toolbar');
-      const deactivated = snapshot.users.filter((user) => !user.uname).length;
-      const filter = button(
-        onlyDeactivated ? '显示全部' : `只看已注销（${deactivated}）`,
-        () => {
-          onlyDeactivated = !onlyDeactivated;
-          render(snapshot);
-        },
-      );
-      filter.disabled = deactivated === 0;
-      toolbar.append(filter);
-      toolbar.append(
-        button(`全选${isFiltered ? '（筛选结果）' : ''}`, () =>
-          actions.onSelectAll(filtered.map((user) => user.mid)),
-        ),
-      );
-      toolbar.append(button('清空', actions.onClearSelection));
-      toolbar.append(
-        h(
-          'span',
-          'count',
-          `已选 ${snapshot.selected.size} / ${snapshot.users.length}${
-            isFiltered ? `（显示 ${filtered.length}）` : ''
-          }${
-            snapshot.exclusion.protectedCount > 0
-              ? `（已保护 ${snapshot.exclusion.protectedCount}）`
-              : ''
-          }`,
-        ),
-      );
-      main.append(toolbar);
-
-      const tagged = snapshot.users.some((user) => (user.tags?.length ?? 0) > 0);
-      if (snapshot.groups.length > 0 && tagged) {
-        const groupRow = h('div', 'toolbar');
-        const all = button('全部分组', () => {
-          onlyGroup = null;
-          render(snapshot);
-        });
-        if (onlyGroup === null) {
-          all.classList.add('on');
-        }
-        groupRow.append(all);
-        for (const group of snapshot.groups) {
-          const count = snapshot.users.filter(
-            (user) => user.tags?.includes(group.tagId) === true,
-          ).length;
-          const chip = button(`${group.name}（${count}）`, () => {
-            onlyGroup = group.tagId;
-            render(snapshot);
-          });
-          if (onlyGroup === group.tagId) {
-            chip.classList.add('on');
-          }
-          chip.disabled = count === 0;
-          groupRow.append(chip);
-        }
-        groupRow.append(h('span', 'count', '按分组筛选'));
-        main.append(groupRow);
-      }
-
-      main.append(renderGrid(snapshot, filtered));
-      if (filtered.length > visibleCount) {
-        const more = h('div', 'actions');
-        more.append(
-          button(`显示更多（还有 ${filtered.length - visibleCount} 个）`, () => {
-            visibleCount += 200;
-            render(snapshot);
-          }),
-        );
-        main.append(more);
-      }
-      const row = h('div', 'actions');
-      const start = button(`下一步（已选 ${snapshot.selected.size}）`, actions.onConfirm, true);
-      start.disabled = snapshot.selected.size === 0;
-      row.append(start);
-      main.append(row);
-      return;
-    }
-
-    if (snapshot.phase === 'confirming') {
-      const total = snapshot.task.planned.length;
-      main.append(h('div', '', `将取关 ${total} 个账号，其余关注保持不变。`));
-      main.append(h('div', 'hint', '取关不会通知对方；重新关注对方会收到提醒。建议先确认列表无误再开始。'));
-      const row = h('div', 'actions');
-      row.append(button('返回', actions.onBack));
-      row.append(button(`开始执行（${total}）`, actions.onStart, true));
-      main.append(row);
-      return;
-    }
-
-    if (snapshot.phase === 'running' || snapshot.phase === 'paused') {
-      const stats = progress(snapshot.task);
-      const bar = h('div', 'bar');
-      const fill = h('i');
-      fill.style.width = `${stats.total === 0 ? 0 : Math.round((stats.done + stats.failed) / stats.total * 100)}%`;
-      bar.append(fill);
-      main.append(bar);
-      const line = h('div', 'stats');
-      line.append(h('span', '', `成功 ${stats.done} / 失败 ${stats.failed} / 共 ${stats.total}`));
-      line.append(h('span', '', `剩余 ${stats.remaining}`));
-      main.append(line);
-      if (snapshot.slowMode) {
-        main.append(h('span', 'tag', '已切换保守节奏'));
-      }
-      const current = snapshot.users.find((user) => user.mid === snapshot.task.currentMid);
-      if (current) {
-        main.append(h('div', 'muted', `当前：${current.uname || '(已注销)'}`));
-      }
-      if (snapshot.task.backoffWaitSeconds !== null) {
-        main.append(h('div', 'message', `B 站暂时限制了操作，等待 ${snapshot.task.backoffWaitSeconds} 秒后自动重试…`));
-      }
-      const row = h('div', 'actions');
-      if (snapshot.phase === 'running') {
-        row.append(button('暂停', actions.onPause));
-      } else {
-        row.append(button('继续', actions.onResume, true));
-      }
-      row.append(button('停止', actions.onStop));
-      main.append(row);
-      main.append(h('div', 'hint', '请保持本页面打开；切到其他标签页会变慢但不会中断。'));
-      return;
-    }
-
-    if (snapshot.phase === 'done' || snapshot.phase === 'aborted') {
-      const stats = progress(snapshot.task);
-      const aborted = snapshot.phase === 'aborted';
-      main.append(h('div', '', aborted ? '任务已停止。' : '清理完成。'));
-      main.append(h('div', 'muted', `成功 ${stats.done} 个，失败 ${stats.failed} 个。`));
-      if (snapshot.task.failed.length > 0) {
-        const list = h('div', 'failed');
-        for (const item of snapshot.task.failed.slice(0, 50)) {
-          list.append(h('div', 'muted', `${item.uname || '(已注销)'}：${item.message}`));
-        }
-        main.append(list);
-      }
-      if (snapshot.backups.length > 0) {
-        const section = h('div', 'section');
-        section.append(h('div', 'label', '本次备份（可随时下载）'));
-        section.append(backupRow(snapshot.backups[0]));
-        main.append(section);
-      }
-      const row = h('div', 'actions');
-      if (snapshot.task.failed.length > 0) {
-        row.append(button(`重试失败项（${snapshot.task.failed.length}）`, actions.onRetryFailed, true));
-      }
-      row.append(button('重新整理', actions.onReload, snapshot.task.failed.length === 0));
-      main.append(row);
-    }
-  }
 
   function saveFile(name: string, text: string, type: string): void {
     const url = URL.createObjectURL(new Blob([text], { type }));
@@ -429,44 +256,366 @@ export function createPanel(actions: PanelActions) {
   }
 
   function backupRow(record: BackupRecord): HTMLElement {
-    const row = h('div', 'backup-row');
+    const row = h('div', 'row');
     const date = new Date(record.createdAt);
+    const info = h('div', 'grow');
+    info.append(h('div', '', `成功 ${record.stats.succeeded} / 失败 ${record.stats.failed}`));
+    info.append(h('div', 'date', date.toLocaleString()));
+    row.append(info);
     row.append(
-      h(
-        'span',
-        'grow',
-        `${date.toLocaleString()} · 计划 ${record.stats.total} · 成功 ${record.stats.succeeded} / 失败 ${record.stats.failed}`,
-      ),
-    );
-    row.append(
-      button('JSON', () =>
-        saveFile(backupFilename(record, 'json'), toBackupJson(record), 'application/json'),
-      ),
-    );
-    row.append(
-      button('CSV', () =>
-        saveFile(
-          backupFilename(record, 'csv'),
-          `\ufeff${toBackupCsv(record)}`,
-          'text/csv',
-        ),
-      ),
+      button('JSON', () => saveFile(backupFilename(record, 'json'), toBackupJson(record), 'application/json'), { size: 'sm' }),
+      button('CSV', () => saveFile(backupFilename(record, 'csv'), `\ufeff${toBackupCsv(record)}`, 'text/csv'), { size: 'sm' }),
     );
     return row;
   }
 
-  function checkbox(
-    label: string,
-    checked: boolean,
-    onChange: (value: boolean) => void,
-  ): HTMLElement {
-    const row = h('label', 'row');
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = checked;
-    input.addEventListener('change', () => onChange(input.checked));
-    row.append(input, h('span', '', label));
-    return row;
+  function renderLoading(container: HTMLElement, snapshot: UiSnapshot): void {
+    const loaded = snapshot.loadProgress?.loaded ?? 0;
+    const total = snapshot.loadProgress?.total ?? 0;
+    const line = h('div', 'hint');
+    line.append(
+      h('span', '', total > 0 ? `正在读取关注列表 ${loaded} / ${total}` : '正在读取关注列表…'),
+    );
+    container.append(line);
+    const grid = h('div', 'grid');
+    grid.style.marginTop = '12px';
+    for (let index = 0; index < 9; index += 1) {
+      grid.append(h('div', 'sk card-sk'));
+    }
+    container.append(grid);
+  }
+
+  function renderLogin(container: HTMLElement): void {
+    container.append(note('未检测到 B 站登录状态，请先登录后再打开面板。', 'warn', 'shield'));
+    container.append(
+      button('打开登录页', () => {
+        window.open('https://passport.bilibili.com/login', '_blank');
+      }, { variant: 'primary', block: true }),
+    );
+  }
+
+  function renderError(container: HTMLElement): void {
+    container.append(button('重试', actions.onReload, { variant: 'primary', icon: 'retry', block: true }));
+  }
+
+  function renderResume(container: HTMLElement, snapshot: UiSnapshot): void {
+    const resume = snapshot.resume;
+    if (!resume) {
+      return;
+    }
+    container.append(
+      note(`上次清理没有完成：计划 ${resume.total} 个，已完成 ${resume.succeeded} 个。`, 'brand', 'clock'),
+    );
+    container.append(
+      h('div', 'hint', `继续将处理剩余 ${resume.total - resume.succeeded} 个账号，已完成的不会重复处理。`),
+    );
+    const foot = h('div', 'foot');
+    foot.append(
+      button('暂不继续', actions.onDismissResume, { variant: 'ghost' }),
+      h('div', 'grow'),
+      button('继续清理', actions.onResumeTask, { variant: 'primary', icon: 'play' }),
+    );
+    container.append(foot);
+  }
+
+  function renderCard(snapshot: UiSnapshot, user: FollowUser): HTMLElement {
+    const excluded = snapshot.exclusion.excludedMids.has(user.mid);
+    const selected = snapshot.selected.has(user.mid);
+    const card = h('div', `card${excluded ? ' is-blocked' : ''}`);
+    card.setAttribute('aria-pressed', String(selected));
+    if (excluded) {
+      card.setAttribute('aria-disabled', 'true');
+    }
+
+    const manual = snapshot.protectedList.some((item) => item.mid === user.mid);
+    const special = isSpecialFollow(user);
+    if (manual || special) {
+      const badge = h('span', 'badge lock');
+      badge.append(icon('lock', 9), h('span', '', special && !manual ? '特别关注' : '保护'));
+      card.append(badge);
+    } else if (snapshot.exclusion.recentMids.has(user.mid)) {
+      card.append(h('span', 'badge fresh', '新关注'));
+    }
+
+    const lock = h('button', 'lock-btn') as HTMLButtonElement;
+    lock.type = 'button';
+    lock.append(icon(manual || special ? 'lock' : 'unlock', 13));
+    lock.disabled = manual || special;
+    lock.title =
+      special && !manual
+        ? 'B 站「特别关注」分组，取消特别关注后自动解除'
+        : manual
+          ? '已在保护名单；如需解除请到设置页'
+          : '加入保护名单（永不被选中）';
+    lock.setAttribute('aria-label', lock.title);
+    lock.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!manual && !special) {
+        actions.onProtect(user.mid);
+      }
+    });
+    card.append(lock);
+
+    const face = avatar(user);
+    if (selected) {
+      const tick = h('span', 'tick');
+      tick.append(icon('check', 11));
+      face.append(tick);
+    }
+    card.append(face, h('span', 'name', user.uname || '(已注销)'));
+    activate(card, () => actions.onToggle(user.mid));
+    return card;
+  }
+
+  function renderSelecting(container: HTMLElement, snapshot: UiSnapshot): void {
+    if (onlyGroup !== null && !snapshot.groups.some((group) => group.tagId === onlyGroup)) {
+      onlyGroup = null;
+    }
+    visibleCount = Math.max(visibleCount, 200);
+    const filtered = snapshot.users.filter(
+      (user) =>
+        (!onlyDeactivated || !user.uname) &&
+        (onlyGroup === null || user.tags?.includes(onlyGroup) === true),
+    );
+    const isFiltered = onlyDeactivated || onlyGroup !== null;
+    const deactivated = snapshot.users.filter((user) => !user.uname).length;
+
+    const facts: string[] = [`已选 ${snapshot.selected.size} / ${snapshot.users.length}`];
+    if (snapshot.exclusion.protectedCount > 0) {
+      facts.push(`已保护 ${snapshot.exclusion.protectedCount}`);
+    }
+    if (snapshot.exclusion.recentCount > 0) {
+      facts.push(`最近 ${snapshot.settings.recentDays} 天关注的 ${snapshot.exclusion.recentCount} 个已跳过`);
+    }
+    if (isFiltered) {
+      facts.push(`当前显示 ${filtered.length}`);
+    }
+    const hint = h('div', 'hint');
+    hint.append(icon('shield', 13), h('span', '', facts.join(' · ')));
+    container.append(hint);
+
+    const chips = h('div', 'chips');
+    chips.style.marginTop = '10px';
+    chips.append(
+      chip('全部', !onlyDeactivated && onlyGroup === null, () => {
+        onlyDeactivated = false;
+        onlyGroup = null;
+        render(snapshot);
+      }),
+      chip('已注销', onlyDeactivated, () => {
+        onlyDeactivated = !onlyDeactivated;
+        render(snapshot);
+      }, deactivated, deactivated === 0),
+    );
+    if (snapshot.groups.length > 0 && snapshot.users.some((user) => (user.tags?.length ?? 0) > 0)) {
+      for (const group of snapshot.groups) {
+        const count = snapshot.users.filter((user) => user.tags?.includes(group.tagId) === true).length;
+        chips.append(
+          chip(group.name, onlyGroup === group.tagId, () => {
+            onlyGroup = group.tagId;
+            render(snapshot);
+          }, count, count === 0),
+        );
+      }
+    }
+    container.append(chips);
+
+    const tools = h('div', 'chips');
+    tools.style.marginTop = '8px';
+    tools.append(
+      button(`全选${isFiltered ? '筛选结果' : ''}`, () => actions.onSelectAll(filtered.map((user) => user.mid)), { size: 'sm' }),
+      button('清空', actions.onClearSelection, { size: 'sm', variant: 'ghost' }),
+    );
+    container.append(tools);
+
+    const grid = h('div', 'grid');
+    grid.style.marginTop = '10px';
+    for (const user of filtered.slice(0, visibleCount)) {
+      grid.append(renderCard(snapshot, user));
+    }
+    container.append(filtered.length === 0 ? h('div', 'empty', '当前筛选下没有账号') : grid);
+
+    if (filtered.length > visibleCount) {
+      const more = h('div', 'actions');
+      more.style.marginTop = '10px';
+      more.append(
+        button(`显示更多（还有 ${filtered.length - visibleCount} 个）`, () => {
+          visibleCount += 200;
+          render(snapshot);
+        }, { size: 'sm', block: true, variant: 'ghost' }),
+      );
+      container.append(more);
+    }
+
+    const foot = h('div', 'foot');
+    const summary = h('div', 'summary');
+    summary.append(h('b', '', String(snapshot.selected.size)), h('span', '', ` / ${snapshot.users.length} 已选`));
+    const next = button('下一步', actions.onConfirm, { variant: 'primary', icon: 'check' });
+    next.disabled = snapshot.selected.size === 0;
+    foot.append(summary, h('div', 'grow'), next);
+    container.append(foot);
+  }
+
+  function renderConfirming(container: HTMLElement, snapshot: UiSnapshot): void {
+    const total = snapshot.task.planned.length;
+    container.append(h('div', 'hint', `以下 ${total} 个账号将被取关，其余关注保持不变`));
+    const strip = h('div', 'strip');
+    for (const user of snapshot.task.planned.slice(0, 14)) {
+      strip.append(avatar(user));
+    }
+    if (total > 14) {
+      strip.append(h('div', 'more', `+${total - 14}`));
+    }
+    container.append(strip);
+    container.append(h('div', 'hint', `计划名单（${total} 个）`));
+    const rows = h('div', 'rows');
+    for (const user of snapshot.task.planned.slice(0, 40)) {
+      const row = h('div', 'row');
+      row.append(h('div', 'grow', user.uname || '(已注销)'));
+      rows.append(row);
+    }
+    if (total > 40) {
+      const row = h('div', 'row');
+      row.append(h('div', 'grow', `… 其余 ${total - 40} 个`));
+      rows.append(row);
+    }
+    container.append(rows);
+    container.append(
+      h('div', 'hint', '取关不会通知对方；重新关注对方会收到提醒。开始前会自动保存备份。'),
+    );
+    const foot = h('div', 'foot');
+    foot.append(
+      button('返回', actions.onBack, { variant: 'ghost', icon: 'back' }),
+      h('div', 'grow'),
+      button(`开始执行 ${total} 个`, actions.onStart, { variant: 'primary', icon: 'play' }),
+    );
+    container.append(foot);
+  }
+
+  function renderRunning(container: HTMLElement, snapshot: UiSnapshot): void {
+    const stats = progress(snapshot.task);
+    const processed = stats.done + stats.failed;
+    const percent = stats.total === 0 ? 0 : Math.round((processed / stats.total) * 100);
+    const bar = h('div', `bar${snapshot.phase === 'running' ? ' busy' : ''}`);
+    const fill = h('i');
+    fill.style.width = `${percent}%`;
+    bar.append(fill);
+    container.append(bar);
+
+    const tiles = h('div', 'tiles');
+    tiles.append(
+      tile('成功', stats.done),
+      tile('失败', stats.failed, stats.failed > 0),
+      tile('剩余', stats.remaining),
+    );
+    container.append(tiles);
+
+    const current = snapshot.users.find((user) => user.mid === snapshot.task.currentMid);
+    if (current) {
+      const box = h('div', 'current');
+      box.append(avatar(current), h('div', 'label', current.uname || '(已注销)'));
+      if (snapshot.phase === 'running') {
+        box.append(h('div', 'spinner'));
+      }
+      container.append(box);
+    }
+
+    if (snapshot.task.backoffWaitSeconds !== null) {
+      container.append(
+        note(`B 站暂时限制了操作，等待 ${snapshot.task.backoffWaitSeconds} 秒后自动重试…`, 'warn', 'clock'),
+      );
+    }
+
+    if (snapshot.slowMode) {
+      const row = h('div', 'eta');
+      const tag = h('span', 'chip-tag');
+      tag.append(icon('shield', 12), h('span', '', '已切换保守节奏'));
+      row.append(tag);
+      container.append(row);
+    }
+
+    const eta = etaMs(snapshot);
+    if (eta !== null && snapshot.phase === 'running') {
+      const row = h('div', 'eta');
+      row.append(icon('clock', 13), h('span', '', `预计剩余约 ${formatDuration(eta)}`));
+      container.append(row);
+    }
+
+    const recent = snapshot.task.succeeded
+      .slice(-6)
+      .reverse()
+      .map((mid) => snapshot.task.planned.find((user) => user.mid === mid))
+      .filter((user): user is FollowUser => Boolean(user));
+    if (recent.length > 0) {
+      container.append(h('div', 'hint', '最近完成'));
+      const rows = h('div', 'rows');
+      for (const user of recent) {
+        const row = h('div', 'row');
+        const mark = h('span', 'ok-mark');
+        mark.append(icon('check', 12));
+        row.append(mark, h('div', 'grow', user.uname || '(已注销)'));
+        rows.append(row);
+      }
+      container.append(rows);
+    }
+    container.append(h('div', 'hint', '请保持本页面打开；切到其他标签页会变慢但不会中断。'));
+    const foot = h('div', 'foot');
+    foot.append(
+      snapshot.phase === 'running'
+        ? button('暂停', actions.onPause, { icon: 'pause' })
+        : button('继续', actions.onResume, { variant: 'primary', icon: 'play' }),
+      h('div', 'grow'),
+      button('停止', actions.onStop, { variant: 'danger', icon: 'stop' }),
+    );
+    container.append(foot);
+  }
+
+  function renderDone(container: HTMLElement, snapshot: UiSnapshot): void {
+    const stats = progress(snapshot.task);
+    const aborted = snapshot.phase === 'aborted';
+    container.append(
+      note(aborted ? '任务已停止，计划中未处理的账号保持关注。' : '清理完成，未勾选的账号保持关注。', aborted ? 'warn' : 'ok', aborted ? 'stop' : 'check'),
+    );
+    const tiles = h('div', 'tiles');
+    tiles.append(
+      tile('成功取关', stats.done),
+      tile('失败', stats.failed, stats.failed > 0),
+      tile('计划', stats.total),
+    );
+    container.append(tiles);
+
+    if (snapshot.task.failed.length > 0) {
+      const rows = h('div', 'rows');
+      for (const item of snapshot.task.failed.slice(0, 50)) {
+        const row = h('div', 'row');
+        row.append(h('div', 'grow', item.uname || '(已注销)'));
+        row.append(h('div', 'err', item.message));
+        rows.append(row);
+      }
+      container.append(h('div', 'hint', '失败明细（可一键重试）'));
+      container.append(rows);
+    }
+
+    if (snapshot.backups.length > 0) {
+      const section = h('div', 'sec');
+      section.append(h('h4', '', '本次备份'));
+      const rows = h('div', 'rows');
+      rows.append(backupRow(snapshot.backups[0]));
+      section.append(rows);
+      container.append(section);
+    }
+
+    const foot = h('div', 'foot');
+    if (snapshot.task.failed.length > 0) {
+      foot.append(
+        button(`重试失败项`, actions.onRetryFailed, { variant: 'primary', icon: 'retry' }),
+        h('div', 'grow'),
+        button('重新整理', actions.onReload, { variant: 'ghost' }),
+      );
+    } else {
+      foot.append(h('div', 'grow'), button('重新整理', actions.onReload, { variant: 'primary', icon: 'retry' }));
+    }
+    container.append(foot);
   }
 
   function intervalLabel(preset: Settings['interval']): string {
@@ -474,43 +623,61 @@ export function createPanel(actions: PanelActions) {
     return `${min / 1000}~${max / 1000} 秒`;
   }
 
-  function renderSettings(snapshot: UiSnapshot): void {
-    const interval = h('div', 'setting');
+  function renderSwitch(
+    label: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+  ): HTMLElement {
+    const row = h('label', 'sw');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = checked;
+    input.addEventListener('change', () => onChange(input.checked));
+    row.append(input, h('span', 'track'), h('span', 'txt', label));
+    return row;
+  }
+
+  function renderSettings(container: HTMLElement, snapshot: UiSnapshot): void {
+    const rhythm = h('div', 'sec');
+    rhythm.append(h('h4', '', '执行节奏'));
+    const interval = h('div', 'field');
     interval.append(h('span', 'label', '执行间隔'));
-    const choices = h('div', 'choices');
+    const seg = h('div', 'seg');
     for (const preset of ['standard', 'conservative'] as const) {
       const node = button(
-        `${preset === 'standard' ? '标准' : '保守'}（${intervalLabel(preset)}）`,
+        `${preset === 'standard' ? '标准' : '保守'} ${intervalLabel(preset)}`,
         () => actions.onChangeSettings({ ...snapshot.settings, interval: preset }),
+        { size: 'sm' },
       );
-      if (snapshot.settings.interval === preset) {
-        node.classList.add('on');
-      }
-      choices.append(node);
+      node.setAttribute('aria-pressed', String(snapshot.settings.interval === preset));
+      seg.append(node);
     }
-    interval.append(choices);
-    main.append(interval);
-    main.append(h('div', 'hint', '触发风控时，本次任务剩余部分会自动切换保守档（3~8 秒）。'));
+    interval.append(seg);
+    rhythm.append(interval);
+    rhythm.append(h('div', 'hint', '触发风控时，本次剩余任务会自动切换保守档。'));
 
-    const limit = h('div', 'setting');
-    limit.append(h('span', 'label', `单次上限（${LIMIT_MIN}~${LIMIT_MAX}）`));
-    const limitRow = h('div', 'row');
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.min = String(LIMIT_MIN);
-    input.max = String(LIMIT_MAX);
-    input.step = '50';
-    input.value = String(snapshot.settings.limit);
-    input.addEventListener('change', () => {
-      actions.onChangeSettings({ ...snapshot.settings, limit: clampLimit(Number(input.value)) });
+    const quota = h('div', 'field');
+    quota.append(h('span', 'label', '单次上限'));
+    const quotaRow = h('div', 'num-row');
+    const quotaInput = document.createElement('input');
+    quotaInput.type = 'number';
+    quotaInput.min = String(LIMIT_MIN);
+    quotaInput.max = String(LIMIT_MAX);
+    quotaInput.step = '50';
+    quotaInput.value = String(snapshot.settings.limit);
+    quotaInput.addEventListener('change', () => {
+      actions.onChangeSettings({ ...snapshot.settings, limit: clampLimit(Number(quotaInput.value)) });
     });
-    limitRow.append(input, h('span', 'muted', '个 / 次'));
-    limit.append(limitRow);
-    main.append(limit);
+    quotaRow.append(quotaInput, h('span', 'unit', `个 / 次（${LIMIT_MIN}~${LIMIT_MAX}）`));
+    quota.append(quotaRow);
+    rhythm.append(quota);
+    container.append(rhythm);
 
-    const recent = h('div', 'setting');
+    const exclude = h('div', 'sec');
+    exclude.append(h('h4', '', '误删防护'));
+    const recent = h('div', 'field');
     recent.append(h('span', 'label', '最近关注排除'));
-    const recentRow = h('div', 'row');
+    const recentRow = h('div', 'num-row');
     const recentInput = document.createElement('input');
     recentInput.type = 'number';
     recentInput.min = '0';
@@ -522,80 +689,107 @@ export function createPanel(actions: PanelActions) {
         recentDays: clampRecentDays(Number(recentInput.value)),
       });
     });
-    recentRow.append(recentInput, h('span', 'muted', '天内关注的账号默认不选（0 = 关闭）'));
+    recentRow.append(recentInput, h('span', 'unit', '天内关注的账号默认不选（0 = 关闭）'));
     recent.append(recentRow);
+    exclude.append(recent);
     if (!snapshot.exclusion.hasFollowedAt) {
-      recent.append(h('div', 'hint', 'B 站当前未返回关注时间，本功能暂不生效。'));
+      exclude.append(h('div', 'hint', 'B 站当前未返回关注时间，本功能暂不生效。'));
     }
-    main.append(recent);
-
-    const protectSection = h('div', 'section');
-    protectSection.append(
-      h('div', 'label', `保护名单（${snapshot.protectedList.length} / ${MAX_PROTECTED}）`),
-    );
-    protectSection.append(
-      h('div', 'hint', '名单中的账号不会被选中或取关；B 站「特别关注」分组自动保护。'),
-    );
+    const protectedRows = h('div', 'rows');
     if (snapshot.protectedList.length === 0) {
-      protectSection.append(h('div', 'muted', '暂无手动锁定，可在整理列表点击 🔓 加入。'));
+      protectedRows.append(h('div', 'empty', '还没有手动锁定，整理列表点击卡片右上角 🔓 即可加入'));
     } else {
       for (const item of snapshot.protectedList) {
-        const row = h('div', 'backup-row');
-        row.append(h('span', 'grow', item.uname || `(已注销 ${item.mid})`));
+        const row = h('div', 'row');
+        row.append(h('div', 'grow', item.uname || `(已注销 ${item.mid})`));
         const armed = unprotectArmed.has(item.mid);
-        row.append(
-          button(armed ? '确认解除' : '解除', () => {
-            if (armed) {
-              unprotectArmed.delete(item.mid);
-              actions.onUnprotect(item.mid);
-            } else {
-              unprotectArmed.add(item.mid);
-              render(snapshot);
-            }
-          }),
-        );
-        protectSection.append(row);
+        const unlock = button(armed ? '确认解除' : '解除', () => {
+          if (armed) {
+            unprotectArmed.delete(item.mid);
+            actions.onUnprotect(item.mid);
+          } else {
+            unprotectArmed.add(item.mid);
+            render(snapshot);
+          }
+        }, { size: 'sm', variant: armed ? 'danger' : 'ghost' });
+        row.append(unlock);
+        protectedRows.append(row);
       }
     }
-    main.append(protectSection);
+    exclude.append(h('div', 'hint', `保护名单（${snapshot.protectedList.length} / ${MAX_PROTECTED}）：名单内账号永不被选中，B 站「特别关注」自动保护。`));
+    exclude.append(protectedRows);
+    container.append(exclude);
 
-    main.append(
-      checkbox('完成时发送系统通知', snapshot.settings.notify, (checked) =>
+    const notify = h('div', 'sec');
+    notify.append(h('h4', '', '通知与诊断'));
+    notify.append(
+      renderSwitch('完成时发送系统通知', snapshot.settings.notify, (checked) =>
         actions.onChangeSettings({ ...snapshot.settings, notify: checked }),
       ),
-    );
-    main.append(
-      checkbox('显示原始错误信息（反馈问题时开启）', snapshot.settings.showRawErrors, (checked) =>
+      renderSwitch('显示原始错误信息（反馈问题时开启）', snapshot.settings.showRawErrors, (checked) =>
         actions.onChangeSettings({ ...snapshot.settings, showRawErrors: checked }),
       ),
     );
-    main.append(
-      h('div', 'hint', '隐私：所有数据只保存在本机浏览器，不会发送到任何外部服务器。'),
-    );
+    notify.append(h('div', 'hint', '隐私：所有数据只保存在本机浏览器，不会发送到任何外部服务器。'));
+    container.append(notify);
 
-    const section = h('div', 'section');
-    section.append(h('div', 'label', `备份中心（保留最近 ${MAX_BACKUPS} 次）`));
+    const backups = h('div', 'sec');
+    backups.append(h('h4', '', `备份中心 · 保留最近 ${MAX_BACKUPS} 次`));
+    const backupRows = h('div', 'rows');
     if (snapshot.backups.length === 0) {
-      section.append(h('div', 'muted', '暂无备份。点击「开始执行」前会自动保存一份。'));
+      backupRows.append(h('div', 'empty', '暂无备份，点击「开始执行」前会自动保存一份'));
     } else {
       for (const record of snapshot.backups) {
-        section.append(backupRow(record));
+        backupRows.append(backupRow(record));
       }
     }
-    main.append(section);
+    backups.append(backupRows);
+    container.append(backups);
 
-    const row = h('div', 'actions');
-    row.append(
-      button(
-        '返回',
-        () => {
-          showSettings = false;
-          render(snapshot);
-        },
-        true,
-      ),
+    const foot = h('div', 'foot');
+    foot.append(
+      h('div', 'grow'),
+      button('完成', () => {
+        showSettings = false;
+        render(snapshot);
+      }, { variant: 'primary', icon: 'check' }),
     );
-    main.append(row);
+    container.append(foot);
+  }
+
+  function render(snapshot: UiSnapshot): void {
+    lastSnapshot = snapshot;
+    settingsButton.setAttribute('aria-pressed', String(showSettings));
+    main.textContent = '';
+    const key = showSettings ? 'settings' : snapshot.phase;
+    const container = h('div', key === lastViewKey ? '' : 'view');
+    lastViewKey = key;
+    main.append(container);
+
+    if (showSettings) {
+      renderSettings(container, snapshot);
+      return;
+    }
+    if (snapshot.message) {
+      container.append(note(snapshot.message, snapshot.phase === 'aborted' ? 'warn' : 'brand', 'shield'));
+    }
+    if (snapshot.phase === 'loading') {
+      renderLoading(container, snapshot);
+    } else if (snapshot.phase === 'login') {
+      renderLogin(container);
+    } else if (snapshot.phase === 'error') {
+      renderError(container);
+    } else if (snapshot.phase === 'resume') {
+      renderResume(container, snapshot);
+    } else if (snapshot.phase === 'selecting') {
+      renderSelecting(container, snapshot);
+    } else if (snapshot.phase === 'confirming') {
+      renderConfirming(container, snapshot);
+    } else if (snapshot.phase === 'running' || snapshot.phase === 'paused') {
+      renderRunning(container, snapshot);
+    } else if (snapshot.phase === 'done' || snapshot.phase === 'aborted') {
+      renderDone(container, snapshot);
+    }
   }
 
   return {
