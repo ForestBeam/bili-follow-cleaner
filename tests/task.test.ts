@@ -5,12 +5,16 @@ import {
   beginAttempt,
   createRetryTask,
   createTask,
+  createUndoTask,
   enterBackoff,
   finishIfDone,
   markFailed,
   markSucceeded,
   nextPending,
+  orderForCleanup,
   pauseRun,
+  parseTaskState,
+  pickForCleanup,
   progress,
   resumeRun,
   setPlanned,
@@ -59,6 +63,59 @@ describe('task lifecycle', () => {
     expect(resumeRun(createTask()).status).toBe('idle');
     expect(backToSelecting(toConfirming(setPlanned(createTask(), USERS))).status).toBe('selecting');
     expect(abortRun(state).status).toBe('aborted');
+  });
+});
+
+describe('任务类型与清理顺序', () => {
+  it('默认类型为取关，解析时兼容缺失与非法值', () => {
+    expect(createTask().kind).toBe('unfollow');
+    const base = { ...createTask(), status: 'running', planned: [{ mid: 1, uname: 'a' }] };
+    expect(parseTaskState(base)?.kind).toBe('unfollow');
+    expect(parseTaskState({ ...base, kind: 'follow' })?.kind).toBe('follow');
+    expect(parseTaskState({ ...base, kind: 'x' })?.kind).toBe('unfollow');
+  });
+
+  it('清理顺序：都有时间按升序，缺时间则反转列表顺序', () => {
+    expect(
+      orderForCleanup([
+        { mid: 1, uname: 'a', followedAt: 300 },
+        { mid: 2, uname: 'b', followedAt: 100 },
+        { mid: 3, uname: 'c', followedAt: 200 },
+      ]).map((user) => user.mid),
+    ).toEqual([2, 3, 1]);
+    expect(
+      orderForCleanup([
+        { mid: 1, uname: 'a', followedAt: 100 },
+        { mid: 2, uname: 'b' },
+      ]).map((user) => user.mid),
+    ).toEqual([2, 1]);
+  });
+
+  it('截断时优先保留关注较早的账号，并保持列表展示顺序', () => {
+    const { chosen, dropped } = pickForCleanup(
+      [
+        { mid: 1, uname: 'a', followedAt: 400 },
+        { mid: 2, uname: 'b', followedAt: 300 },
+        { mid: 3, uname: 'c', followedAt: 200 },
+        { mid: 4, uname: 'd', followedAt: 100 },
+      ],
+      2,
+    );
+    expect(chosen.map((user) => user.mid)).toEqual([3, 4]);
+    expect(dropped).toBe(2);
+  });
+
+  it('撤销任务由成功项构成且类型为 follow', () => {
+    let state = setPlanned(createTask(), [
+      { mid: 1, uname: 'a' },
+      { mid: 2, uname: 'b' },
+    ]);
+    state = beginAttempt(state, 1);
+    state = markSucceeded(state);
+    const undo = createUndoTask(state);
+    expect(undo.kind).toBe('follow');
+    expect(undo.planned.map((user) => user.mid)).toEqual([1]);
+    expect(undo.succeeded).toEqual([]);
   });
 });
 

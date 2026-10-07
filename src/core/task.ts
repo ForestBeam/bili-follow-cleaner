@@ -10,6 +10,8 @@ export type TaskStatus =
   | 'done'
   | 'aborted';
 
+export type TaskKind = 'unfollow' | 'follow';
+
 export interface FollowUser {
   mid: number;
   uname: string;
@@ -30,6 +32,7 @@ export interface FailedItem extends FollowUser {
 }
 
 export interface TaskState {
+  kind: TaskKind;
   status: TaskStatus;
   planned: FollowUser[];
   succeeded: number[];
@@ -47,8 +50,9 @@ export interface TaskProgress {
   remaining: number;
 }
 
-export function createTask(): TaskState {
+export function createTask(kind: TaskKind = 'unfollow'): TaskState {
   return {
+    kind,
     status: 'idle',
     planned: [],
     succeeded: [],
@@ -60,12 +64,37 @@ export function createTask(): TaskState {
   };
 }
 
-export function setPlanned(_state: TaskState, planned: FollowUser[]): TaskState {
+export function setPlanned(state: TaskState, planned: FollowUser[]): TaskState {
   return {
-    ...createTask(),
+    ...createTask(state.kind),
     status: 'selecting',
     planned,
   };
+}
+
+export function orderForCleanup(users: FollowUser[]): FollowUser[] {
+  if (users.length <= 1) {
+    return [...users];
+  }
+  const hasAllTimes = users.every((user) => typeof user.followedAt === 'number');
+  if (hasAllTimes) {
+    return [...users].sort((a, b) => (a.followedAt ?? 0) - (b.followedAt ?? 0));
+  }
+  return [...users].reverse();
+}
+
+export function pickForCleanup(
+  users: FollowUser[],
+  limit: number,
+): { chosen: FollowUser[]; dropped: number } {
+  if (users.length <= limit) {
+    return { chosen: [...users], dropped: 0 };
+  }
+  const displayOrder = new Map<number, number>();
+  users.forEach((user, index) => displayOrder.set(user.mid, index));
+  const chosen = orderForCleanup(users).slice(0, limit);
+  chosen.sort((a, b) => (displayOrder.get(a.mid) ?? 0) - (displayOrder.get(b.mid) ?? 0));
+  return { chosen, dropped: users.length - limit };
 }
 
 export function toConfirming(state: TaskState): TaskState {
@@ -175,9 +204,25 @@ export function removeFromPlan(state: TaskState, mid: number): TaskState {
 
 export function createRetryTask(state: TaskState): TaskState {
   return {
-    ...createTask(),
+    ...createTask(state.kind),
     status: 'selecting',
     planned: state.failed.map(({ mid, uname }) => ({ mid, uname })),
+  };
+}
+
+export function createUndoTask(state: TaskState): TaskState {
+  const byMid = new Map(state.planned.map((user) => [user.mid, user]));
+  const planned: FollowUser[] = [];
+  for (const mid of state.succeeded) {
+    const user = byMid.get(mid);
+    if (user) {
+      planned.push({ mid: user.mid, uname: user.uname, face: user.face });
+    }
+  }
+  return {
+    ...createTask('follow'),
+    status: 'selecting',
+    planned,
   };
 }
 
@@ -261,6 +306,7 @@ export function parseTaskState(raw: unknown): TaskState | null {
     }
   }
   return {
+    kind: candidate.kind === 'follow' ? 'follow' : 'unfollow',
     status: candidate.status as TaskStatus,
     planned,
     succeeded,

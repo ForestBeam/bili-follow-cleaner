@@ -79,7 +79,7 @@ describe('background 图标点击', () => {
     clicks[0](BILI_TAB);
 
     await vi.waitFor(() => expect(fake.tabs.sendMessage).toHaveBeenCalledTimes(1));
-    expect(fake.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'bfc-open' });
+    expect(fake.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'bfc-toggle' });
     expect(fake.scripting.executeScript).not.toHaveBeenCalled();
     expect(createdTabs).toEqual([]);
     expect(storage).toEqual({});

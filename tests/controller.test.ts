@@ -12,6 +12,7 @@ const USERS = [
 function makeController(overrides: Partial<ControllerDeps> = {}) {
   const deps: ControllerDeps = {
     unfollow: vi.fn(async () => ({ code: 0, message: '0' })),
+    follow: vi.fn(async () => ({ code: 0, message: '0' })),
     sleep: vi.fn(async () => {}),
     randomDelayMs: () => 10,
     now: () => Date.now(),
@@ -19,6 +20,7 @@ function makeController(overrides: Partial<ControllerDeps> = {}) {
     saveTask: vi.fn(async () => {}),
     saveBackups: vi.fn(async () => {}),
     saveProtected: vi.fn(async () => {}),
+    saveSelection: vi.fn(async () => {}),
     ...overrides,
   };
   return { controller: new CleanupController(deps), deps };
@@ -232,7 +234,7 @@ describe('单次上限', () => {
     expect(controller.getSnapshot().message).toContain('最多处理 3 个');
 
     controller.confirm();
-    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([1, 2, 3]);
+    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([3, 4, 5]);
   });
 
   it('确认阶段按上限截断超出的选择', () => {
@@ -242,8 +244,8 @@ describe('单次上限', () => {
     controller.setSettings({ ...DEFAULT_SETTINGS, limit: 2 });
 
     controller.confirm();
-    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([1, 2]);
-    expect(controller.getSnapshot().message).toContain('只处理前 2 个');
+    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([4, 5]);
+    expect(controller.getSnapshot().message).toContain('其余 3 个保持不变');
   });
 });
 
@@ -558,5 +560,87 @@ describe('风控自动降速', () => {
     expect(controller.getSnapshot().slowMode).toBe(false);
 
     await waitForPhase(controller, 'done');
+  });
+});
+
+describe('回关与清理顺序', () => {
+  it('计划按关注时间较早优先排列', () => {
+    const { controller } = makeController();
+    controller.setSettings({ ...DEFAULT_SETTINGS, limit: 2 });
+    controller.setUsers([
+      { mid: 1, uname: 'newest', followedAt: 400 },
+      { mid: 2, uname: 'newer', followedAt: 300 },
+      { mid: 3, uname: 'older', followedAt: 200 },
+      { mid: 4, uname: 'oldest', followedAt: 100 },
+    ]);
+    controller.selectAll();
+    controller.confirm();
+    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([3, 4]);
+  });
+
+  it('完成后可一键回关本次取关成功的账号', async () => {
+    const { controller, deps } = makeController();
+    controller.setUsers(USERS);
+    controller.selectAll();
+    controller.confirm();
+    controller.start();
+    await waitForPhase(controller, 'done');
+
+    controller.startUndo();
+    expect(controller.getSnapshot().phase).toBe('confirming');
+    expect(controller.getSnapshot().task.kind).toBe('follow');
+    expect(controller.getSnapshot().task.planned.map((user) => user.mid)).toEqual([1, 2, 3]);
+
+    controller.start();
+    await waitForPhase(controller, 'done');
+
+    expect(deps.follow).toHaveBeenCalledTimes(3);
+    expect(deps.unfollow).toHaveBeenCalledTimes(3);
+    expect(controller.getSnapshot().task.kind).toBe('follow');
+    expect(controller.getSnapshot().backups).toHaveLength(1);
+  });
+
+  it('回关失败项可重试，且保持 follow 类型', async () => {
+    const follow = vi
+      .fn()
+      .mockResolvedValueOnce({ code: -400, message: '请求错误' })
+      .mockResolvedValue({ code: 0, message: '0' });
+    const { controller, deps } = makeController({ follow });
+    controller.setUsers([USERS[0]]);
+    controller.selectAll();
+    controller.confirm();
+    controller.start();
+    await waitForPhase(controller, 'done');
+
+    controller.startUndo();
+    controller.start();
+    await waitForPhase(controller, 'done');
+    expect(controller.getSnapshot().task.failed).toHaveLength(1);
+
+    controller.retryFailed();
+    expect(controller.getSnapshot().task.kind).toBe('follow');
+    controller.start();
+    await waitForPhase(controller, 'done');
+    expect(deps.follow).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('选择持久化', () => {
+  it('选择变化即落盘，开始执行时清空', () => {
+    const { controller, deps } = makeController();
+    controller.setUsers(USERS);
+    controller.toggle(2);
+    expect(deps.saveSelection).toHaveBeenLastCalledWith([2]);
+    controller.confirm();
+    controller.start();
+    expect(deps.saveSelection).toHaveBeenLastCalledWith([]);
+  });
+
+  it('恢复选择时忽略不存在与受保护的账号', () => {
+    const { controller } = makeController();
+    controller.setUsers(USERS);
+    controller.protect(2);
+    controller.restoreSelection([2, 3, 99]);
+    expect([...controller.getSnapshot().selected]).toEqual([3]);
   });
 });

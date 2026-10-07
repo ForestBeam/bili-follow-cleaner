@@ -36,6 +36,8 @@ export interface PanelActions {
   onClose(): void;
   onResumeTask(): void;
   onDismissResume(): void;
+  onUndo(): void;
+  onInfo(text: string): void;
   onChangeSettings(settings: Settings): void;
 }
 
@@ -53,7 +55,9 @@ type IconName =
   | 'retry'
   | 'download'
   | 'clock'
-  | 'shield';
+  | 'shield'
+  | 'link'
+  | 'search';
 
 const ICONS: Record<IconName, string> = {
   mark: '<path d="M4 6h11M4 12h7M4 18h5"/><path d="m17.6 3.4.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/>',
@@ -70,6 +74,8 @@ const ICONS: Record<IconName, string> = {
   download: '<path d="M12 4.4v9.8m0 0 3.8-3.8M12 14.2 8.2 10.4"/><path d="M5.2 18.4h13.6"/>',
   clock: '<circle cx="12" cy="12" r="7.8"/><path d="M12 8.2v4.3l3 1.8"/>',
   shield: '<path d="M12 4.4 19 6.9v5c0 4.4-2.9 7.2-7 8.4-4.1-1.2-7-4-7-8.4v-5z"/>',
+  link: '<path d="M14.2 4.4h5.4v5.4"/><path d="M19.6 4.4 11 13"/><path d="M18.4 13.8v4.3a1.9 1.9 0 0 1-1.9 1.9H5.9A1.9 1.9 0 0 1 4 18.1V7.5a1.9 1.9 0 0 1 1.9-1.9h4.3"/>',
+  search: '<circle cx="11" cy="11" r="6.2"/><path d="m15.6 15.6 4 4"/>',
 };
 
 interface ButtonOpts {
@@ -208,7 +214,11 @@ function etaMs(snapshot: UiSnapshot): number | null {
   return stats.remaining * ((min + max) / 2);
 }
 
-export function createPanel(actions: PanelActions) {
+export interface PanelOptions {
+  notice?: string;
+}
+
+export function createPanel(actions: PanelActions, options: PanelOptions = {}) {
   const host = document.createElement('div');
   host.id = 'bfc-panel-host';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -222,13 +232,25 @@ export function createPanel(actions: PanelActions) {
   const titles = h('div', 'titles');
   titles.append(h('div', 'kicker', 'follow list cleaner'));
   titles.append(h('div', 'title', '关注列表整理工具'));
+  const accountLine = h('div', 'acct');
+  titles.append(accountLine);
   const settingsButton = iconButton('gear', '设置', () => {
     showSettings = !showSettings;
     if (lastSnapshot) {
       render(lastSnapshot);
     }
   });
-  const closeButton = iconButton('x', '关闭面板', () => actions.onClose());
+  const closeButton = iconButton('x', '关闭面板', () => {
+    const runningState = lastSnapshot?.phase === 'running' || lastSnapshot?.phase === 'paused';
+    if (runningState && !closeArmed) {
+      closeArmed = true;
+      closeButton.classList.add('armed');
+      closeButton.title = '任务运行中，再点一次关闭（任务会继续）';
+      closeButton.setAttribute('aria-label', '任务运行中，再点一次关闭');
+      return;
+    }
+    actions.onClose();
+  });
   const headerActions = h('div', 'hd-actions');
   headerActions.append(settingsButton, closeButton);
   header.append(mark, titles, headerActions);
@@ -244,7 +266,37 @@ export function createPanel(actions: PanelActions) {
   let lastViewKey = '';
   let onlyDeactivated = false;
   let onlyGroup: number | null = null;
+  let query = '';
+  let queryFocused = false;
+  let stopArmed = false;
+  let closeArmed = false;
   const unprotectArmed = new Set<number>();
+
+  function disarm(): void {
+    stopArmed = false;
+    closeArmed = false;
+    closeButton.classList.remove('armed');
+    closeButton.title = '关闭面板';
+    closeButton.setAttribute('aria-label', '关闭面板');
+    if (unprotectArmed.size > 0) {
+      unprotectArmed.clear();
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    if (stopArmed || closeArmed || unprotectArmed.size > 0) {
+      disarm();
+      if (lastSnapshot) {
+        render(lastSnapshot);
+      }
+      return;
+    }
+    actions.onClose();
+  }
+  document.addEventListener('keydown', onKeyDown, true);
 
   function saveFile(name: string, text: string, type: string): void {
     const url = URL.createObjectURL(new Blob([text], { type }));
@@ -337,24 +389,43 @@ export function createPanel(actions: PanelActions) {
       card.append(h('span', 'badge fresh', '新关注'));
     }
 
+    const cardActions = h('div', 'card-actions');
+    const openLink = h('button', 'lock-btn') as HTMLButtonElement;
+    openLink.type = 'button';
+    openLink.append(icon('link', 12));
+    openLink.title = '在新标签打开 TA 的主页';
+    openLink.setAttribute('aria-label', openLink.title);
+    openLink.addEventListener('click', (event) => {
+      event.stopPropagation();
+      window.open(`https://space.bilibili.com/${user.mid}`, '_blank', 'noopener');
+    });
     const lock = h('button', 'lock-btn') as HTMLButtonElement;
     lock.type = 'button';
     lock.append(icon(manual || special ? 'lock' : 'unlock', 13));
-    lock.disabled = manual || special;
+    if (manual || special) {
+      lock.classList.add('on');
+    }
     lock.title =
       special && !manual
         ? 'B 站「特别关注」分组，取消特别关注后自动解除'
         : manual
-          ? '已在保护名单；如需解除请到设置页'
+          ? '已在保护名单，再点一次解除'
           : '加入保护名单（永不被选中）';
     lock.setAttribute('aria-label', lock.title);
     lock.addEventListener('click', (event) => {
       event.stopPropagation();
-      if (!manual && !special) {
+      if (special && !manual) {
+        actions.onInfo('这是 B 站的「特别关注」，在 B 站里取消特别关注后会自动解除。');
+        return;
+      }
+      if (manual) {
+        actions.onUnprotect(user.mid);
+      } else {
         actions.onProtect(user.mid);
       }
     });
-    card.append(lock);
+    cardActions.append(openLink, lock);
+    card.append(cardActions);
 
     const face = avatar(user);
     if (selected) {
@@ -372,15 +443,17 @@ export function createPanel(actions: PanelActions) {
       onlyGroup = null;
     }
     visibleCount = Math.max(visibleCount, 200);
+    const needle = query.trim().toLowerCase();
     const filtered = snapshot.users.filter(
       (user) =>
         (!onlyDeactivated || !user.uname) &&
-        (onlyGroup === null || user.tags?.includes(onlyGroup) === true),
+        (onlyGroup === null || user.tags?.includes(onlyGroup) === true) &&
+        (needle === '' || user.uname.toLowerCase().includes(needle)),
     );
-    const isFiltered = onlyDeactivated || onlyGroup !== null;
+    const isFiltered = onlyDeactivated || onlyGroup !== null || needle !== '';
     const deactivated = snapshot.users.filter((user) => !user.uname).length;
 
-    const facts: string[] = [`已选 ${snapshot.selected.size} / ${snapshot.users.length}`];
+    const facts: string[] = [];
     if (snapshot.exclusion.protectedCount > 0) {
       facts.push(`已保护 ${snapshot.exclusion.protectedCount}`);
     }
@@ -391,18 +464,39 @@ export function createPanel(actions: PanelActions) {
       facts.push(`当前显示 ${filtered.length}`);
     }
     const hint = h('div', 'hint');
-    hint.append(icon('shield', 13), h('span', '', facts.join(' · ')));
+    hint.append(
+      icon('shield', 13),
+      h(
+        'span',
+        '',
+        facts.length > 0 ? facts.join(' · ') : '点卡片选择要取关的账号，锁按钮可加入保护',
+      ),
+    );
     container.append(hint);
 
+    const searchRow = h('div', 'search-row');
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'search';
+    searchInput.placeholder = '搜索昵称';
+    searchInput.value = query;
+    searchInput.setAttribute('aria-label', '搜索昵称');
+    searchInput.addEventListener('input', () => {
+      query = searchInput.value;
+      queryFocused = true;
+      render(snapshot);
+    });
+    searchRow.append(searchInput);
+    container.append(searchRow);
+
     const chips = h('div', 'chips');
-    chips.style.marginTop = '10px';
     chips.append(
       chip('全部', !onlyDeactivated && onlyGroup === null, () => {
         onlyDeactivated = false;
         onlyGroup = null;
         render(snapshot);
       }),
-      chip('已注销', onlyDeactivated, () => {
+      chip('已注销账号', onlyDeactivated, () => {
         onlyDeactivated = !onlyDeactivated;
         render(snapshot);
       }, deactivated, deactivated === 0),
@@ -422,18 +516,47 @@ export function createPanel(actions: PanelActions) {
 
     const tools = h('div', 'chips');
     tools.style.marginTop = '8px';
+    const selectAllButton = button(
+      `全选${isFiltered ? '筛选结果' : ''}`,
+      () => actions.onSelectAll(filtered.map((user) => user.mid)),
+      { size: 'sm' },
+    );
+    selectAllButton.disabled = filtered.length === 0;
     tools.append(
-      button(`全选${isFiltered ? '筛选结果' : ''}`, () => actions.onSelectAll(filtered.map((user) => user.mid)), { size: 'sm' }),
+      selectAllButton,
       button('清空', actions.onClearSelection, { size: 'sm', variant: 'ghost' }),
     );
     container.append(tools);
+    if (snapshot.protectedList.length === 0) {
+      container.append(
+        h(
+          'div',
+          'hint',
+          '锁按钮 = 加入保护名单，该账号永不被取关；再点一次可解除。B 站「特别关注」自动保护。',
+        ),
+      );
+    }
 
     const grid = h('div', 'grid');
     grid.style.marginTop = '10px';
     for (const user of filtered.slice(0, visibleCount)) {
       grid.append(renderCard(snapshot, user));
     }
-    container.append(filtered.length === 0 ? h('div', 'empty', '当前筛选下没有账号') : grid);
+    container.append(
+      filtered.length === 0
+        ? h('div', 'empty', needle !== '' ? '没有匹配的账号' : '当前筛选下没有账号')
+        : grid,
+    );
+
+    main.onscroll = () => {
+      if (
+        filtered.length > visibleCount &&
+        main.scrollTop + main.clientHeight >= main.scrollHeight - 240
+      ) {
+        visibleCount += 200;
+        render(snapshot);
+      }
+    };
 
     if (filtered.length > visibleCount) {
       const more = h('div', 'actions');
@@ -449,16 +572,36 @@ export function createPanel(actions: PanelActions) {
 
     const foot = h('div', 'foot');
     const summary = h('div', 'summary');
-    summary.append(h('b', '', String(snapshot.selected.size)), h('span', '', ` / ${snapshot.users.length} 已选`));
+    summary.append(
+      h('span', '', '已选 '),
+      h('b', '', String(snapshot.selected.size)),
+      h('span', '', ` / 共 ${snapshot.users.length} 个关注`),
+    );
     const next = button('下一步', actions.onConfirm, { variant: 'primary', icon: 'check' });
     next.disabled = snapshot.selected.size === 0;
     foot.append(summary, h('div', 'grow'), next);
     container.append(foot);
+
+    if (queryFocused) {
+      queryFocused = false;
+      searchInput.focus();
+      const end = searchInput.value.length;
+      searchInput.setSelectionRange(end, end);
+    }
   }
 
   function renderConfirming(container: HTMLElement, snapshot: UiSnapshot): void {
     const total = snapshot.task.planned.length;
-    container.append(h('div', 'hint', `以下 ${total} 个账号将被取关，其余关注保持不变`));
+    const undo = snapshot.task.kind === 'follow';
+    container.append(
+      h(
+        'div',
+        'hint',
+        undo
+          ? `以下 ${total} 个账号将被重新关注`
+          : `以下 ${total} 个账号将被取关，其余关注保持不变`,
+      ),
+    );
     const strip = h('div', 'strip');
     for (const user of snapshot.task.planned.slice(0, 14)) {
       strip.append(avatar(user));
@@ -481,13 +624,23 @@ export function createPanel(actions: PanelActions) {
     }
     container.append(rows);
     container.append(
-      h('div', 'hint', '取关不会通知对方；重新关注对方会收到提醒。开始前会自动保存备份。'),
+      h(
+        'div',
+        'hint',
+        undo
+          ? '重新关注后对方会收到提醒。执行期间请保持页面打开。'
+          : '取关不会通知对方；重新关注对方会收到提醒。开始前会自动保存备份，完成后可一键回关本次账号。',
+      ),
     );
     const foot = h('div', 'foot');
     foot.append(
       button('返回', actions.onBack, { variant: 'ghost', icon: 'back' }),
       h('div', 'grow'),
-      button(`开始执行 ${total} 个`, actions.onStart, { variant: 'primary', icon: 'play' }),
+      button(
+        undo ? `重新关注 ${total} 个` : `取消关注 ${total} 个`,
+        actions.onStart,
+        { variant: 'primary', icon: 'play' },
+      ),
     );
     container.append(foot);
   }
@@ -558,14 +711,40 @@ export function createPanel(actions: PanelActions) {
       }
       container.append(rows);
     }
-    container.append(h('div', 'hint', '请保持本页面打开；切到其他标签页会变慢但不会中断。'));
+    container.append(
+      h(
+        'div',
+        'hint',
+        '可关闭面板，任务会在页面内继续，完成后通知你；也请保持本页面打开，切到其他标签页会变慢但不会中断。',
+      ),
+    );
+    if (stopArmed) {
+      container.append(note('中止后已取关的账号不会自动恢复；可在完成页一键回关。', 'warn', 'stop'));
+    }
     const foot = h('div', 'foot');
+    const stopButton = button(
+      stopArmed ? '确认中止' : '中止任务',
+      () => {
+        if (!stopArmed) {
+          stopArmed = true;
+          render(snapshot);
+          return;
+        }
+        stopArmed = false;
+        actions.onStop();
+      },
+      {
+        variant: 'danger',
+        icon: 'stop',
+        title: stopArmed ? '已取关的不会自动恢复' : '停止本次清理',
+      },
+    );
     foot.append(
       snapshot.phase === 'running'
         ? button('暂停', actions.onPause, { icon: 'pause' })
         : button('继续', actions.onResume, { variant: 'primary', icon: 'play' }),
       h('div', 'grow'),
-      button('停止', actions.onStop, { variant: 'danger', icon: 'stop' }),
+      stopButton,
     );
     container.append(foot);
   }
@@ -573,22 +752,51 @@ export function createPanel(actions: PanelActions) {
   function renderDone(container: HTMLElement, snapshot: UiSnapshot): void {
     const stats = progress(snapshot.task);
     const aborted = snapshot.phase === 'aborted';
+    const undo = snapshot.task.kind === 'follow';
     container.append(
-      note(aborted ? '任务已停止，计划中未处理的账号保持关注。' : '清理完成，未勾选的账号保持关注。', aborted ? 'warn' : 'ok', aborted ? 'stop' : 'check'),
+      note(
+        aborted
+          ? '任务已中止，计划中未处理的账号保持原状。'
+          : undo
+            ? '已把本次取关成功的账号重新关注。'
+            : '清理完成，未勾选的账号保持关注。',
+        aborted ? 'warn' : 'ok',
+        aborted ? 'stop' : 'check',
+      ),
     );
     const tiles = h('div', 'tiles');
     tiles.append(
-      tile('成功取关', stats.done),
+      tile(undo ? '已重新关注' : '成功取关', stats.done),
       tile('失败', stats.failed, stats.failed > 0),
       tile('计划', stats.total),
     );
     container.append(tiles);
 
+    if (!undo && stats.done > 0) {
+      const undoSection = h('div', 'sec');
+      undoSection.append(h('h4', '', '误删了？'));
+      undoSection.append(
+        h(
+          'div',
+          'hint',
+          `可以把本次取关成功的 ${stats.done} 个账号重新关注；重新关注后对方会收到提醒。`,
+        ),
+      );
+      undoSection.append(
+        button(`回关本次 ${stats.done} 个`, actions.onUndo, {
+          block: true,
+          icon: 'back',
+          title: '把这次取关成功的账号重新关注',
+        }),
+      );
+      container.append(undoSection);
+    }
+
     if (snapshot.task.failed.length > 0) {
       const rows = h('div', 'rows');
       for (const item of snapshot.task.failed.slice(0, 50)) {
         const row = h('div', 'row');
-        row.append(h('div', 'grow', item.uname || '(已注销)'));
+        row.append(h('div', 'grow', item.uname || '(账号已注销)'));
         row.append(h('div', 'err', item.message));
         rows.append(row);
       }
@@ -598,7 +806,7 @@ export function createPanel(actions: PanelActions) {
 
     if (snapshot.backups.length > 0) {
       const section = h('div', 'sec');
-      section.append(h('h4', '', '本次备份'));
+      section.append(h('h4', '', '本次操作记录'));
       const rows = h('div', 'rows');
       rows.append(backupRow(snapshot.backups[0]));
       section.append(rows);
@@ -701,7 +909,7 @@ export function createPanel(actions: PanelActions) {
     } else {
       for (const item of snapshot.protectedList) {
         const row = h('div', 'row');
-        row.append(h('div', 'grow', item.uname || `(已注销 ${item.mid})`));
+        row.append(h('div', 'grow', item.uname || `(账号已注销 ${item.mid})`));
         const armed = unprotectArmed.has(item.mid);
         const unlock = button(armed ? '确认解除' : '解除', () => {
           if (armed) {
@@ -718,6 +926,9 @@ export function createPanel(actions: PanelActions) {
     }
     exclude.append(h('div', 'hint', `保护名单（${snapshot.protectedList.length} / ${MAX_PROTECTED}）：名单内账号永不被选中，B 站「特别关注」自动保护。`));
     exclude.append(protectedRows);
+    exclude.append(
+      h('div', 'hint', '误删了？完成页提供「回关本次」，可把最近一批取关的账号一键重新关注。'),
+    );
     container.append(exclude);
 
     const notify = h('div', 'sec');
@@ -734,10 +945,10 @@ export function createPanel(actions: PanelActions) {
     container.append(notify);
 
     const backups = h('div', 'sec');
-    backups.append(h('h4', '', `备份中心 · 保留最近 ${MAX_BACKUPS} 次`));
+    backups.append(h('h4', '', `操作记录 · 保留最近 ${MAX_BACKUPS} 次（可导出）`));
     const backupRows = h('div', 'rows');
     if (snapshot.backups.length === 0) {
-      backupRows.append(h('div', 'empty', '暂无备份，点击「开始执行」前会自动保存一份'));
+      backupRows.append(h('div', 'empty', '暂无记录；开始执行前会自动保存一份计划与结果'));
     } else {
       for (const record of snapshot.backups) {
         backupRows.append(backupRow(record));
@@ -759,42 +970,62 @@ export function createPanel(actions: PanelActions) {
 
   function render(snapshot: UiSnapshot): void {
     lastSnapshot = snapshot;
+    if (snapshot.phase !== 'running' && snapshot.phase !== 'paused') {
+      stopArmed = false;
+      closeArmed = false;
+      closeButton.classList.remove('armed');
+      closeButton.title = '关闭面板';
+      closeButton.setAttribute('aria-label', '关闭面板');
+    }
+    accountLine.textContent = snapshot.account
+      ? `当前账号：${snapshot.account.uname || snapshot.account.mid}`
+      : '';
     settingsButton.setAttribute('aria-pressed', String(showSettings));
-    main.textContent = '';
     const key = showSettings ? 'settings' : snapshot.phase;
+    const keepScroll = key === lastViewKey;
+    const prevScroll = main.scrollTop;
+    main.textContent = '';
+    main.onscroll = null;
     const container = h('div', key === lastViewKey ? '' : 'view');
     lastViewKey = key;
     main.append(container);
 
     if (showSettings) {
       renderSettings(container, snapshot);
-      return;
+    } else {
+      if (snapshot.message) {
+        container.append(note(snapshot.message, snapshot.phase === 'aborted' ? 'warn' : 'brand', 'shield'));
+      }
+      if (snapshot.phase === 'loading') {
+        if (options.notice) {
+          container.append(note(options.notice, 'brand', 'clock'));
+        }
+        renderLoading(container, snapshot);
+      } else if (snapshot.phase === 'login') {
+        renderLogin(container);
+      } else if (snapshot.phase === 'error') {
+        renderError(container);
+      } else if (snapshot.phase === 'resume') {
+        renderResume(container, snapshot);
+      } else if (snapshot.phase === 'selecting') {
+        renderSelecting(container, snapshot);
+      } else if (snapshot.phase === 'confirming') {
+        renderConfirming(container, snapshot);
+      } else if (snapshot.phase === 'running' || snapshot.phase === 'paused') {
+        renderRunning(container, snapshot);
+      } else if (snapshot.phase === 'done' || snapshot.phase === 'aborted') {
+        renderDone(container, snapshot);
+      }
     }
-    if (snapshot.message) {
-      container.append(note(snapshot.message, snapshot.phase === 'aborted' ? 'warn' : 'brand', 'shield'));
-    }
-    if (snapshot.phase === 'loading') {
-      renderLoading(container, snapshot);
-    } else if (snapshot.phase === 'login') {
-      renderLogin(container);
-    } else if (snapshot.phase === 'error') {
-      renderError(container);
-    } else if (snapshot.phase === 'resume') {
-      renderResume(container, snapshot);
-    } else if (snapshot.phase === 'selecting') {
-      renderSelecting(container, snapshot);
-    } else if (snapshot.phase === 'confirming') {
-      renderConfirming(container, snapshot);
-    } else if (snapshot.phase === 'running' || snapshot.phase === 'paused') {
-      renderRunning(container, snapshot);
-    } else if (snapshot.phase === 'done' || snapshot.phase === 'aborted') {
-      renderDone(container, snapshot);
+    if (keepScroll) {
+      main.scrollTop = prevScroll;
     }
   }
 
   return {
     render,
     destroy() {
+      document.removeEventListener('keydown', onKeyDown, true);
       host.remove();
     },
   };

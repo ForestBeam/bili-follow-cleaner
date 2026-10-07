@@ -17,12 +17,14 @@ import {
   beginAttempt,
   createRetryTask,
   createTask,
+  createUndoTask,
   enterBackoff,
   finishIfDone,
   isResumable,
   markFailed,
   markSucceeded,
   nextPending,
+  pickForCleanup,
   pauseRun,
   removeFromPlan,
   resumeRun,
@@ -38,6 +40,7 @@ export type Phase = TaskStatus | 'login' | 'error' | 'resume';
 
 export interface ControllerDeps {
   unfollow: (mid: number) => Promise<{ code: number | undefined; message: string }>;
+  follow: (mid: number) => Promise<{ code: number | undefined; message: string }>;
   sleep: (ms: number) => Promise<void>;
   randomDelayMs: (interval: IntervalPreset) => number;
   now: () => number;
@@ -45,10 +48,12 @@ export interface ControllerDeps {
   saveTask: (task: TaskState | null) => Promise<void>;
   saveBackups: (backups: BackupRecord[]) => Promise<void>;
   saveProtected: (list: ProtectedUser[]) => Promise<void>;
+  saveSelection: (mids: number[]) => Promise<void>;
 }
 
 export interface UiSnapshot {
   phase: Phase;
+  account: { mid: number; uname: string } | null;
   users: FollowUser[];
   selected: ReadonlySet<number>;
   task: TaskState;
@@ -84,6 +89,7 @@ export class CleanupController {
   private prePhase: 'loading' | 'login' | 'error' | 'resume' | null = null;
   private loadProgress: { loaded: number; total: number } | null = null;
   private message: string | null = null;
+  private account: { mid: number; uname: string } | null = null;
   private loopRunning = false;
 
   constructor(private readonly deps: ControllerDeps) {}
@@ -115,6 +121,7 @@ export class CleanupController {
   setUsers(users: FollowUser[]): void {
     this.users = users;
     this.selected = new Set();
+    this.persistSelection();
     this.prePhase = null;
     this.message = null;
     this.task = setPlanned(this.task, users);
@@ -135,6 +142,7 @@ export class CleanupController {
     } else {
       this.selected.add(mid);
     }
+    this.persistSelection();
     this.deps.onChange();
   }
 
@@ -144,18 +152,45 @@ export class CleanupController {
     const pool = this.users.filter(
       (user) => (!allowed || allowed.has(user.mid)) && this.isSelectable(user.mid),
     );
-    const picked = pool.slice(0, limit);
-    this.selected = new Set(picked.map((user) => user.mid));
+    const { chosen, dropped } = pickForCleanup(pool, limit);
+    this.selected = new Set(chosen.map((user) => user.mid));
     this.message =
-      pool.length > limit
-        ? `单次最多处理 ${limit} 个，已选中前 ${limit} 个；可在设置中调整上限。`
+      dropped > 0
+        ? `单次最多处理 ${limit} 个，已优先选中关注时间较早的 ${limit} 个；可在设置中调整上限。`
         : null;
+    this.persistSelection();
     this.deps.onChange();
   }
 
   clearSelection(): void {
     this.selected = new Set();
+    this.persistSelection();
     this.deps.onChange();
+  }
+
+  restoreSelection(mids: number[]): void {
+    if (this.task.status !== 'selecting') {
+      return;
+    }
+    const allowed = new Set(mids);
+    this.selected = new Set(
+      this.users.filter((user) => allowed.has(user.mid) && this.isSelectable(user.mid)).map((user) => user.mid),
+    );
+    this.deps.onChange();
+  }
+
+  setAccount(account: { mid: number; uname: string } | null): void {
+    this.account = account;
+    this.deps.onChange();
+  }
+
+  setMessage(text: string | null): void {
+    this.message = text;
+    this.deps.onChange();
+  }
+
+  private persistSelection(): void {
+    void this.deps.saveSelection([...this.selected]);
   }
 
   confirm(): void {
@@ -163,12 +198,14 @@ export class CleanupController {
       (user) => this.selected.has(user.mid) && this.isSelectable(user.mid),
     );
     if (picked.length === 0) {
+      this.message = '请先选择要取关的账号。';
+      this.deps.onChange();
       return;
     }
     const limit = this.settings.limit;
-    const chosen = picked.slice(0, limit);
-    if (picked.length > limit) {
-      this.message = `单次最多处理 ${limit} 个，本次只处理前 ${limit} 个。`;
+    const { chosen, dropped } = pickForCleanup(picked, limit);
+    if (dropped > 0) {
+      this.message = `单次最多处理 ${limit} 个；已优先处理关注时间较早的 ${limit} 个，其余 ${dropped} 个保持不变。`;
     }
     this.task = toConfirming(setPlanned(createTask(), chosen));
     this.deps.onChange();
@@ -187,11 +224,28 @@ export class CleanupController {
     }
     this.message = null;
     this.slowMode = false;
+    this.selected = new Set();
+    this.persistSelection();
     this.task = startRun(this.task);
-    this.beginBackup(this.task.planned);
+    if (this.task.kind === 'unfollow') {
+      this.beginBackup(this.task.planned);
+    }
     this.persist(true);
     this.deps.onChange();
     void this.loop();
+  }
+
+  startUndo(): void {
+    if (this.task.kind !== 'unfollow' || this.task.succeeded.length === 0) {
+      return;
+    }
+    const undo = createUndoTask(this.task);
+    if (undo.planned.length === 0) {
+      return;
+    }
+    this.message = `将把本次取关成功的 ${undo.planned.length} 个账号重新关注。`;
+    this.task = toConfirming(undo);
+    this.deps.onChange();
   }
 
   pause(): void {
@@ -262,6 +316,7 @@ export class CleanupController {
     this.protectedList = removeProtected(this.protectedList, mid);
     void this.deps.saveProtected(this.protectedList);
     this.recomputeExclusion();
+    this.message = '已解除保护，该账号恢复可选。';
     this.deps.onChange();
   }
 
@@ -429,6 +484,7 @@ export class CleanupController {
   getSnapshot(): UiSnapshot {
     return {
       phase: this.prePhase ?? this.task.status,
+      account: this.account,
       users: this.users,
       selected: this.selected,
       task: this.task,
@@ -466,7 +522,8 @@ export class CleanupController {
         this.task = beginAttempt(this.task, next.mid);
         this.deps.onChange();
 
-        const result = await this.deps.unfollow(next.mid);
+        const act = this.task.kind === 'follow' ? this.deps.follow : this.deps.unfollow;
+        const result = await act(next.mid);
         const decision = decideAfterResult(result.code, result.message, this.task.attempt);
 
         if (decision.action === 'succeed') {

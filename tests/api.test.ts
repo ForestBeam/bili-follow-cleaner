@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BRIDGE_CHANNEL, type ApiResponseMessage, type BridgeParamValue } from '../src/bridge/protocol';
 import type { BridgeClient } from '../src/bridge/client';
-import { fetchFollowings, fetchGroups, fetchNav, stemFromUrl, unfollow } from '../src/core/api';
+import { fetchFollowings, fetchGroups, fetchNav, follow, stemFromUrl, unfollow } from '../src/core/api';
 
 type Handler = (path: string, method: string, params: Record<string, BridgeParamValue>) => unknown;
 
@@ -40,13 +40,19 @@ describe('fetchNav', () => {
       data: {
         isLogin: true,
         mid: 12345,
+        uname: 'tester',
         wbi_img: { img_url: 'https://i0.hdslb.com/bfs/wbi/key1.png', sub_url: 'https://i0.hdslb.com/bfs/wbi/key2.png' },
       },
     }));
 
     const nav = await fetchNav(client);
 
-    expect(nav).toEqual({ isLogin: true, mid: 12345, keys: { imgKey: 'key1', subKey: 'key2' } });
+    expect(nav).toEqual({
+      isLogin: true,
+      mid: 12345,
+      uname: 'tester',
+      keys: { imgKey: 'key1', subKey: 'key2' },
+    });
   });
 
   it('reports logged-out state without keys', async () => {
@@ -114,6 +120,21 @@ describe('unfollow', () => {
       path: '/x/relation/modify',
       method: 'POST',
       params: { fid: 42, act: 2, re_src: 11, csrf: 'csrf-token' },
+    });
+  });
+});
+
+describe('follow', () => {
+  it('posts a modify request with act=1', async () => {
+    const { client, calls } = mockClient(() => ({ code: 0, message: '0' }));
+
+    const result = await follow(client, 42, 'csrf-token');
+
+    expect(result).toEqual({ code: 0, message: '0' });
+    expect(calls[0]).toEqual({
+      path: '/x/relation/modify',
+      method: 'POST',
+      params: { fid: 42, act: 1, re_src: 11, csrf: 'csrf-token' },
     });
   });
 });

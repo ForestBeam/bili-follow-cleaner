@@ -1,5 +1,5 @@
 import { createBridgeClient, type BridgeClient } from '../bridge/client';
-import { fetchFollowings, fetchGroups, fetchNav, unfollow, type FollowGroup } from '../core/api';
+import { fetchFollowings, fetchGroups, fetchNav, follow, unfollow, type FollowGroup } from '../core/api';
 import { randomDelayMs as delayFor, type Settings } from '../core/settings';
 import { createStorage } from '../core/storage';
 import { progress, type TaskStatus } from '../core/task';
@@ -17,6 +17,7 @@ let controller: CleanupController | null = null;
 let activePanel: Panel | null = null;
 let opening = false;
 let notifiedStatus: TaskStatus | null = null;
+let pendingNotice: string | null = null;
 
 function readCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
@@ -41,6 +42,13 @@ function getController(): CleanupController {
         }
         return unfollow(bridge, mid, csrf);
       },
+      follow: async (mid) => {
+        const csrf = readCookie('bili_jct');
+        if (!csrf) {
+          return { code: -111, message: '缺少 csrf 令牌' };
+        }
+        return follow(bridge, mid, csrf);
+      },
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       randomDelayMs: (interval) => delayFor(interval),
       now: () => Date.now(),
@@ -52,6 +60,7 @@ function getController(): CleanupController {
       saveTask: (task) => storage.saveTask(task),
       saveBackups: (backups) => storage.saveBackups(backups),
       saveProtected: (list) => storage.saveProtected(list),
+      saveSelection: (mids) => storage.saveSelection(mids),
     });
   }
   return controller;
@@ -62,7 +71,15 @@ function notifyOnSettle(snapshot: UiSnapshot): void {
   const settled = status === 'done' || status === 'aborted';
   if (settled && notifiedStatus !== status) {
     const stats = progress(snapshot.task);
-    const title = status === 'done' ? '关注列表清理完成' : '关注列表清理已中止';
+    const undo = snapshot.task.kind === 'follow';
+    const title =
+      status === 'done'
+        ? undo
+          ? '回关完成'
+          : '关注列表清理完成'
+        : undo
+          ? '回关已中止'
+          : '关注列表清理已中止';
     void chrome.runtime
       .sendMessage({
         type: 'bfc-notify',
@@ -95,6 +112,8 @@ const actions: PanelActions = {
     getController().dismissResume();
     void loadFollowings();
   },
+  onUndo: () => getController().startUndo(),
+  onInfo: (text) => getController().setMessage(text),
   onChangeSettings: (settings: Settings) => {
     void storage.saveSettings(settings);
     getController().setSettings(settings);
@@ -115,6 +134,7 @@ async function loadFollowings(): Promise<void> {
       control.setLoginRequired();
       return;
     }
+    control.setAccount({ mid: nav.mid, uname: nav.uname });
     const { items } = await fetchFollowings(bridge, nav.keys, nav.mid, {
       onProgress: (loaded, total) => control.setLoadProgress(loaded, total),
     });
@@ -124,6 +144,7 @@ async function loadFollowings(): Promise<void> {
     }
     control.setGroups(await loadGroups(bridge));
     control.setUsers(items);
+    control.restoreSelection(await storage.loadSelection());
   } catch (error) {
     control.setError(error instanceof Error ? error.message : String(error));
   }
@@ -153,7 +174,9 @@ async function openPanel(): Promise<void> {
 
   opening = true;
   try {
-    activePanel = createPanel(actions);
+    const notice = pendingNotice ?? undefined;
+    pendingNotice = null;
+    activePanel = createPanel(actions, { notice });
     if (phase === 'idle' || phase === 'login' || phase === 'error') {
       await loadFollowings();
     } else {
@@ -165,10 +188,17 @@ async function openPanel(): Promise<void> {
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  if ((message as { type?: string } | null)?.type === 'bfc-open') {
-    void openPanel();
-    sendResponse({ ok: true });
+  if ((message as { type?: string } | null)?.type !== 'bfc-toggle') {
+    return;
   }
+  if (activePanel) {
+    activePanel.destroy();
+    activePanel = null;
+    sendResponse({ ok: true, action: 'closed' });
+    return;
+  }
+  void openPanel();
+  sendResponse({ ok: true, action: 'opened' });
 });
 
 async function boot(): Promise<void> {
@@ -187,6 +217,7 @@ async function boot(): Promise<void> {
     return;
   }
   await chrome.storage.local.remove(OPEN_FLAG);
+  pendingNotice = '已为你打开 B 站页面，正在读取关注列表…';
   await openPanel();
 }
 

@@ -5,6 +5,7 @@ import { createTask, parseTaskState, type TaskState } from '../src/core/task';
 import {
   BACKUPS_KEY,
   PROTECTED_KEY,
+  SELECTION_KEY,
   SETTINGS_KEY,
   TASK_KEY,
   createStorage,
@@ -95,6 +96,16 @@ describe('存储封装', () => {
     expect(data[PROTECTED_KEY]).toEqual([{ mid: 2, uname: 'b' }]);
     expect(await storage.loadProtected()).toEqual([{ mid: 2, uname: 'b' }]);
   });
+
+  it('选择集往返：非法值被过滤，写入后可读回', async () => {
+    const { area, data } = fakeArea({ [SELECTION_KEY]: [1, 'x', 2, 2, null] });
+    const storage = createStorage(area);
+    expect(await storage.loadSelection()).toEqual([1, 2]);
+
+    await storage.saveSelection([5]);
+    expect(data[SELECTION_KEY]).toEqual([5]);
+    expect(await storage.loadSelection()).toEqual([5]);
+  });
 });
 
 describe('任务解析', () => {
@@ -108,6 +119,7 @@ describe('任务解析', () => {
       attempt: 3,
     });
     expect(parsed).toEqual({
+      kind: 'unfollow',
       status: 'paused',
       planned: [{ mid: 1, uname: 'a', face: undefined, tags: [0, 3] }],
       succeeded: [1],

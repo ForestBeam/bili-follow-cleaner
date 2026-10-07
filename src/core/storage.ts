@@ -7,6 +7,7 @@ export const TASK_KEY = 'task';
 export const BACKUPS_KEY = 'backups';
 export const SETTINGS_KEY = 'settings';
 export const PROTECTED_KEY = 'protected';
+export const SELECTION_KEY = 'selection';
 
 export interface StorageLike {
   get(keys: string): Promise<Record<string, unknown>>;
@@ -23,6 +24,21 @@ export interface Storage {
   saveTask(task: TaskState | null): Promise<void>;
   loadProtected(): Promise<ProtectedUser[]>;
   saveProtected(list: ProtectedUser[]): Promise<void>;
+  loadSelection(): Promise<number[]>;
+  saveSelection(mids: number[]): Promise<void>;
+}
+
+export function parseSelection(raw: unknown): number[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const seen = new Set<number>();
+  for (const item of raw) {
+    if (typeof item === 'number' && Number.isFinite(item)) {
+      seen.add(item);
+    }
+  }
+  return [...seen];
 }
 
 export function createStorage(area: StorageLike): Storage {
@@ -58,6 +74,13 @@ export function createStorage(area: StorageLike): Storage {
     },
     async saveProtected(list) {
       await area.set({ [PROTECTED_KEY]: list });
+    },
+    async loadSelection() {
+      const stored = await area.get(SELECTION_KEY);
+      return parseSelection(stored[SELECTION_KEY]);
+    },
+    async saveSelection(mids) {
+      await area.set({ [SELECTION_KEY]: mids });
     },
   };
 }

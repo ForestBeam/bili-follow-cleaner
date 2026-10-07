@@ -9,30 +9,30 @@ const DEFAULT_TITLE = '关注列表整理工具';
 
 let handling = false;
 
-async function sendOpen(tabId: number): Promise<boolean> {
+async function sendToggle(tabId: number): Promise<boolean> {
   try {
-    const reply: unknown = await chrome.tabs.sendMessage(tabId, { type: 'bfc-open' });
+    const reply: unknown = await chrome.tabs.sendMessage(tabId, { type: 'bfc-toggle' });
     return (reply as { ok?: boolean } | undefined)?.ok === true;
   } catch {
     return false;
   }
 }
 
-async function injectAndOpen(tabId: number): Promise<boolean> {
+async function injectAndToggle(tabId: number): Promise<boolean> {
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content-main.js'], world: 'MAIN' });
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content-ui.js'] });
   } catch {
     return false;
   }
-  return sendOpen(tabId);
+  return sendToggle(tabId);
 }
 
 async function handleClick(tab: chrome.tabs.Tab): Promise<void> {
   const tabId = tab.id;
 
   if (tabId !== undefined && INJECTABLE.test(tab.url ?? '')) {
-    if ((await sendOpen(tabId)) || (await injectAndOpen(tabId))) {
+    if ((await sendToggle(tabId)) || (await injectAndToggle(tabId))) {
       return;
     }
   }

@@ -94,6 +94,8 @@ export const PANEL_CSS = `
   cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
 .icon-btn:hover { background: var(--card); border-color: var(--line); color: var(--ink); }
 .icon-btn[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-ink); }
+.icon-btn.armed { background: var(--danger-soft); color: var(--danger); }
+.acct { font-size: 10.5px; line-height: 1.4; color: var(--ink-3); }
 
 /* ---------- scroll area ---------- */
 main { flex: 1; overflow: auto; display: flex; flex-direction: column;
@@ -165,6 +167,16 @@ main::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 9
 .lock-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; opacity: 1; }
 .lock-btn:disabled { opacity: 1; color: var(--mint); cursor: default; }
 .card:hover .lock-btn { opacity: 1; }
+.card-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 1px; }
+.card-actions .lock-btn { position: static; }
+.card-actions .lock-btn:first-child:hover:not(:disabled) { background: var(--brand-soft); color: var(--brand-ink); }
+.lock-btn.on { opacity: 1; color: var(--mint); }
+.search-row { margin-top: 10px; }
+.search { width: 100%; padding: 8px 11px; border-radius: 11px; border: 1px solid var(--line-strong);
+  background: var(--card); color: var(--ink); font: 500 12.5px/1.4 var(--font-sans); }
+.search::placeholder { color: var(--ink-3); }
+.search:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.search::-webkit-search-cancel-button { cursor: pointer; opacity: 0.55; }
 
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -172,6 +184,7 @@ main::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 9
   color: var(--ink); font: 600 13px/1.2 var(--font-sans); cursor: pointer;
   transition: transform 0.14s, box-shadow 0.14s, background 0.14s, border-color 0.14s, color 0.14s; }
 .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--ink-3); }
+.btn:disabled { opacity: 0.48; cursor: not-allowed; box-shadow: none; }
 .btn:active:not(:disabled) { transform: translateY(0); }
 .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .btn:disabled { opacity: 0.45; cursor: default; }

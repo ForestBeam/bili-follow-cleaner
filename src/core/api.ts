@@ -11,6 +11,7 @@ export interface WbiKeys {
 export interface NavInfo {
   isLogin: boolean;
   mid: number | null;
+  uname: string;
   keys: WbiKeys;
 }
 
@@ -23,7 +24,12 @@ export function stemFromUrl(url: string): string {
 export async function fetchNav(client: BridgeClient): Promise<NavInfo> {
   const response = await client.request('/x/web-interface/nav', 'GET', {});
   const body = (response.body ?? {}) as {
-    data?: { isLogin?: boolean; mid?: number; wbi_img?: { img_url?: string; sub_url?: string } };
+    data?: {
+      isLogin?: boolean;
+      mid?: number;
+      uname?: string;
+      wbi_img?: { img_url?: string; sub_url?: string };
+    };
   };
   const data = body.data ?? {};
   const imgUrl = data.wbi_img?.img_url ?? '';
@@ -31,6 +37,7 @@ export async function fetchNav(client: BridgeClient): Promise<NavInfo> {
   return {
     isLogin: Boolean(data.isLogin),
     mid: typeof data.mid === 'number' ? data.mid : null,
+    uname: typeof data.uname === 'string' ? data.uname : '',
     keys: { imgKey: imgUrl ? stemFromUrl(imgUrl) : '', subKey: subUrl ? stemFromUrl(subUrl) : '' },
   };
 }
@@ -135,17 +142,36 @@ export async function fetchFollowings(
   return { items, total };
 }
 
-export async function unfollow(
+export type RelationAction = 1 | 2;
+
+export async function modifyRelation(
   client: BridgeClient,
   mid: number,
+  act: RelationAction,
   csrf: string,
 ): Promise<{ code: number | undefined; message: string }> {
   const response = await client.request('/x/relation/modify', 'POST', {
     fid: mid,
-    act: 2,
+    act,
     re_src: 11,
     csrf,
   });
   const body = (response.body ?? {}) as { code?: number; message?: string };
   return { code: body.code, message: body.message ?? '' };
+}
+
+export function unfollow(
+  client: BridgeClient,
+  mid: number,
+  csrf: string,
+): Promise<{ code: number | undefined; message: string }> {
+  return modifyRelation(client, mid, 2, csrf);
+}
+
+export function follow(
+  client: BridgeClient,
+  mid: number,
+  csrf: string,
+): Promise<{ code: number | undefined; message: string }> {
+  return modifyRelation(client, mid, 1, csrf);
 }
