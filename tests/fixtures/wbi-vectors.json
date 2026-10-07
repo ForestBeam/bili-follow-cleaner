@@ -1,0 +1,44 @@
+[
+  {
+    "imgKey": "7f1a3c9d2b8e4065af17c2d94e6b8031",
+    "subKey": "c4e0d8196a2f53b7e0948c1d7b62fa35",
+    "wts": 1700000000,
+    "params": {
+      "vmid": "12345678",
+      "pn": "1",
+      "ps": "50",
+      "order": "desc",
+      "order_type": "attention",
+      "jsonp": "jsonp"
+    },
+    "expectedQuery": "jsonp=jsonp&order=desc&order_type=attention&pn=1&ps=50&vmid=12345678&wts=1700000000",
+    "expectedMixinKey": "b711c29c59816a30bfc04b27086941a0",
+    "expectedWRid": "8d96aa6fefaaa99ed7760338fdd4eb10"
+  },
+  {
+    "imgKey": "7f1a3c9d2b8e4065af17c2d94e6b8031",
+    "subKey": "c4e0d8196a2f53b7e0948c1d7b62fa35",
+    "wts": 1700000123,
+    "params": {
+      "q": "Hello!(World)*",
+      "tag": "a b~c-d_e.f",
+      "kw": "关注列表",
+      "empty": ""
+    },
+    "expectedQuery": "empty=&kw=%E5%85%B3%E6%B3%A8%E5%88%97%E8%A1%A8&q=HelloWorld&tag=a+b~c-d_e.f&wts=1700000123",
+    "expectedMixinKey": "b711c29c59816a30bfc04b27086941a0",
+    "expectedWRid": "4ea296975e9de4558d20b8a6a22eee83"
+  },
+  {
+    "imgKey": "7f1a3c9d2b8e4065af17c2d94e6b8031",
+    "subKey": "c4e0d8196a2f53b7e0948c1d7b62fa35",
+    "wts": 1700000999,
+    "params": {
+      "mid": "10086",
+      "type": "unfollow"
+    },
+    "expectedQuery": "mid=10086&type=unfollow&wts=1700000999",
+    "expectedMixinKey": "b711c29c59816a30bfc04b27086941a0",
+    "expectedWRid": "8c80a0bcf525a2d0927f61a87832f368"
+  }
+]

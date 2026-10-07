@@ -1,0 +1,20 @@
+{
+  "name": "bili-follow-cleaner",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "关注列表整理工具 —— 哔哩哔哩关注列表批量清理浏览器扩展（非官方）",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "pack": "node scripts/build.mjs && node scripts/pack.mjs",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.4",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
