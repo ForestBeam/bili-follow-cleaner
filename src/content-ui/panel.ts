@@ -697,7 +697,7 @@ export function createPanel(actions: PanelActions) {
     }
     const protectedRows = h('div', 'rows');
     if (snapshot.protectedList.length === 0) {
-      protectedRows.append(h('div', 'empty', '还没有手动锁定，整理列表点击卡片右上角 🔓 即可加入'));
+      protectedRows.append(h('div', 'empty', '还没有手动锁定，在整理列表点击卡片右上角的锁按钮即可加入'));
     } else {
       for (const item of snapshot.protectedList) {
         const row = h('div', 'row');
