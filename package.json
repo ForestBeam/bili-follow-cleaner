@@ -1,6 +1,6 @@
 {
   "name": "bili-follow-cleaner",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "关注列表整理工具 —— 哔哩哔哩关注列表批量清理浏览器扩展（非官方）",

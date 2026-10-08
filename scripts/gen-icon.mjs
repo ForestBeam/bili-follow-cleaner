@@ -7,7 +7,7 @@ const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'asse
 const STORE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'store');
 const SIZES = [16, 48, 128];
 const SUPER = 4;
-const BACKGROUND = [61, 126, 255];
+const BACKGROUND = [208, 40, 95];
 const FOREGROUND = [255, 255, 255];
 
 function crc32(buffer) {

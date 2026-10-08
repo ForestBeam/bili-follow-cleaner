@@ -16,6 +16,7 @@ Manifest V3 浏览器扩展（桌面版 Edge / Chrome），用于批量整理 B 
 | 设计规格 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-design.md` | 架构、功能规格、验收清单 |
 | 设计规格 v1.1 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-v1.1-design.md` | 保护名单、最近关注排除、风控自动降速 |
 | 设计规格 v1.2 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-v1.2-ux-design.md` | 交互修订：一键回关、搜索、控件闭环与文案 |
+| 设计规格 v1.3 | `docs/superpowers/specs/2026-10-08-bili-follow-cleaner-v1.3-growth-design.md` | 品牌统一与产品内增长位（页脚、报告卡、关于） |
 | 实现计划 | `docs/superpowers/plans/2026-10-07-bili-follow-cleaner-plan.md` | 里程碑与任务拆解 |
 | 真机清单 | `docs/e2e-checklist.md` | 上架前人工验证步骤 |
 | 上架材料 | `store/` | 商店文案、审核说明、标准尺寸截图与提交清单 |

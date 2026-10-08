@@ -285,6 +285,29 @@ main::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 9
   animation: bfc-shimmer 1.3s ease-in-out infinite; }
 .sk.card-sk { height: 82px; }
 
+/* ---------- byline / report card / about ---------- */
+.byline { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 14px 9px;
+  border-top: 1px solid var(--line); background: var(--foot-bg); backdrop-filter: blur(10px);
+  font-size: 11px; color: var(--ink-3); }
+.byline .grow { flex: 1; min-width: 0; }
+.byline-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini { flex: none; border: none; border-radius: 8px; padding: 3px 8px; background: transparent;
+  color: var(--ink-2); font: 600 11px/1.5 var(--font-sans); cursor: pointer; white-space: nowrap;
+  transition: background 0.15s, color 0.15s; }
+.mini:hover:not(:disabled) { background: var(--card-2); color: var(--brand-ink); }
+.mini:disabled { color: var(--mint); cursor: default; opacity: 1; }
+.mini:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.report { margin-top: 12px; padding: 11px 12px 9px; border-radius: 14px;
+  border: 1px solid var(--line-strong); background: var(--card); box-shadow: var(--shadow-sm); }
+.report-top { display: flex; align-items: center; gap: 10px; }
+.report-head { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+.report-sub { margin-top: 4px; font-size: 11.5px; color: var(--ink-2); }
+.report-mark { margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line);
+  font-size: 10px; color: var(--ink-3); }
+.report-mark-line { display: block; }
+.report-mark-url { display: block; font-family: var(--font-num); }
+.link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
 /* ---------- motion ---------- */
 @keyframes bfc-rise { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
 @keyframes bfc-fade { from { opacity: 0; transform: translateY(4px); } }

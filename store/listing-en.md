@@ -27,6 +27,7 @@ Follow List Cleaner helps you tidy up the accounts you follow on Bilibili: pick 
 - Protection list: manually locked accounts plus Bilibili "Special follow" are never selected
 - Recent-follow exclusion: accounts followed within the last 7 days are skipped by default
 - Operation log: a plan-and-result snapshot is saved before each run and can be exported as JSON / CSV
+- Finish screen report card: shows what this run did and lets you copy a share-ready summary
 
 ### How to use
 
@@ -44,3 +45,7 @@ Follow List Cleaner helps you tidy up the accounts you follow on Bilibili: pick 
 ### Disclaimer
 
 This is an unofficial tool, not affiliated with or endorsed by Bilibili. Bulk unfollowing may trigger platform rate limits; defaults are conservative on purpose. Start small and follow Bilibili's terms of service.
+
+### About the author
+
+Built by ForestBeam. Open source (MIT): https://github.com/ForestBeam/bili-follow-cleaner . The panel footer and the settings "About & feedback" section link to the project home and issue tracker; links only open when the user clicks them, and the extension itself makes no external requests.

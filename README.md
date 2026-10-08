@@ -16,6 +16,8 @@
 - 最近关注排除：最近 N 天关注的账号默认跳过（默认 7 天，可在设置中改为 0 关闭）
 - 昵称搜索 + 滚动加载 + 卡片主页入口，取关前方便核对
 - 完成页「回关本次 N 个」：误删可一键重新关注，走同一套节奏与重试
+- 完成页清理报告卡：显示本次数量与计划，可一键复制分享文案（自带工具署名，方便截图）
+- 面板页脚常驻作者与 GitHub 入口；设置页「关于与反馈」可直接提问题、看更新
 - 工具栏图标再点即关闭面板，Esc 也可关闭；选择自动保留，刷新不丢
 - 保护锁在卡片上双向切换；中止任务需二次确认
 - 极简设置：执行间隔（标准 / 保守）、单次上限、最近关注天数、保护名单、通知开关、显示原始错误信息
@@ -71,6 +73,13 @@ node scripts/gen-icon.mjs  # 重新生成图标
 文档：设计规格 `docs/superpowers/specs/`、实现计划 `docs/superpowers/plans/`、真机清单 [docs/e2e-checklist.md](docs/e2e-checklist.md)。
 
 商店上架材料（文案 / 审核说明 / 截图 / 提交清单）见 [store/](store/README.md)。
+
+## 作者与反馈
+
+- 作者：ForestBeam
+- 项目主页 / 更新日志：https://github.com/ForestBeam/bili-follow-cleaner
+- 问题反馈 / 功能建议：https://github.com/ForestBeam/bili-follow-cleaner/issues
+- 工具完全免费、开源（MIT），没有账号体系，也不会有付费版本；如果它帮到了你，欢迎在 GitHub 点个 Star，或推荐给需要的朋友。
 
 ## 许可
 

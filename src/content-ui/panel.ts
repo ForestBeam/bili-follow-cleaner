@@ -5,6 +5,7 @@ import {
   toBackupJson,
   type BackupRecord,
 } from '../core/backup';
+import { AUTHOR_NAME, ISSUES_URL, REPO_URL } from '../core/links';
 import { MAX_PROTECTED, isSpecialFollow } from '../core/protection';
 import {
   LIMIT_MAX,
@@ -15,7 +16,8 @@ import {
   delayRangeMs,
   type Settings,
 } from '../core/settings';
-import { progress, type FollowUser } from '../core/task';
+import { buildShareText, reportHeadline, type ShareSummary } from '../core/share';
+import { progress, type FollowUser, type TaskProgress } from '../core/task';
 import type { UiSnapshot } from './controller';
 import { PANEL_CSS } from './styles';
 
@@ -256,7 +258,17 @@ export function createPanel(actions: PanelActions, options: PanelOptions = {}) {
   header.append(mark, titles, headerActions);
 
   const main = h('main');
-  panel.append(header, main);
+  const byline = h('footer', 'byline');
+  const authorLine = h('span', 'byline-txt', `非官方工具 · 作者 ${AUTHOR_NAME}`);
+  const githubLink = h('button', 'mini', 'GitHub') as HTMLButtonElement;
+  githubLink.type = 'button';
+  githubLink.title = '在 GitHub 查看源码、更新与反馈（新标签打开）';
+  githubLink.setAttribute('aria-label', githubLink.title);
+  githubLink.addEventListener('click', () => {
+    window.open(REPO_URL, '_blank', 'noopener');
+  });
+  byline.append(authorLine, h('span', 'grow'), githubLink);
+  panel.append(header, main, byline);
   shadow.append(style, panel);
   document.body.append(host);
 
@@ -749,6 +761,47 @@ export function createPanel(actions: PanelActions, options: PanelOptions = {}) {
     container.append(foot);
   }
 
+  function reportCard(snapshot: UiSnapshot, stats: TaskProgress): HTMLElement {
+    const summary: ShareSummary = {
+      kind: snapshot.task.kind,
+      done: stats.done,
+      failed: stats.failed,
+    };
+    const card = h('div', 'report');
+    const top = h('div', 'report-top');
+    top.append(h('div', 'report-head', reportHeadline(summary)));
+    const copy = h('button', 'mini', '复制文案') as HTMLButtonElement;
+    copy.type = 'button';
+    copy.title = '复制一段可直接粘贴的分享文案（不含昵称）';
+    copy.setAttribute('aria-label', copy.title);
+    copy.addEventListener('click', () => {
+      const clipboard = navigator.clipboard as Clipboard | undefined;
+      if (!clipboard) {
+        actions.onInfo('当前环境不支持自动复制，直接截图本卡片也可以。');
+        return;
+      }
+      void clipboard.writeText(buildShareText(summary)).then(
+        () => {
+          copy.textContent = '已复制';
+          copy.disabled = true;
+        },
+        () => actions.onInfo('复制失败，直接截图本卡片也可以。'),
+      );
+    });
+    top.append(copy);
+    card.append(top);
+    const sub = [`计划 ${stats.total} 个`];
+    if (stats.failed > 0) {
+      sub.unshift(`失败 ${stats.failed} 个`);
+    }
+    card.append(h('div', 'report-sub', sub.join(' · ')));
+    const mark = h('div', 'report-mark');
+    mark.append(h('span', 'report-mark-line', '由「关注列表整理工具」生成'));
+    mark.append(h('span', 'report-mark-url', REPO_URL.replace('https://', '')));
+    card.append(mark);
+    return card;
+  }
+
   function renderDone(container: HTMLElement, snapshot: UiSnapshot): void {
     const stats = progress(snapshot.task);
     const aborted = snapshot.phase === 'aborted';
@@ -764,13 +817,17 @@ export function createPanel(actions: PanelActions, options: PanelOptions = {}) {
         aborted ? 'stop' : 'check',
       ),
     );
-    const tiles = h('div', 'tiles');
-    tiles.append(
-      tile(undo ? '已重新关注' : '成功取关', stats.done),
-      tile('失败', stats.failed, stats.failed > 0),
-      tile('计划', stats.total),
-    );
-    container.append(tiles);
+    if (stats.done > 0) {
+      container.append(reportCard(snapshot, stats));
+    } else {
+      const tiles = h('div', 'tiles');
+      tiles.append(
+        tile(undo ? '已重新关注' : '成功取关', stats.done),
+        tile('失败', stats.failed, stats.failed > 0),
+        tile('计划', stats.total),
+      );
+      container.append(tiles);
+    }
 
     if (!undo && stats.done > 0) {
       const undoSection = h('div', 'sec');
@@ -956,6 +1013,35 @@ export function createPanel(actions: PanelActions, options: PanelOptions = {}) {
     }
     backups.append(backupRows);
     container.append(backups);
+
+    const about = h('div', 'sec');
+    about.append(h('h4', '', '关于与反馈'));
+    about.append(
+      h(
+        'div',
+        'hint',
+        `免费开源，无账号、无统计；作者 ${AUTHOR_NAME}。如果它帮到了你，欢迎在 GitHub 点个 Star 或推荐给朋友。`,
+      ),
+    );
+    const aboutLinks = h('div', 'link-row');
+    aboutLinks.append(
+      button(
+        '反馈问题 / 提需求',
+        () => {
+          window.open(ISSUES_URL, '_blank', 'noopener');
+        },
+        { size: 'sm', icon: 'link' },
+      ),
+      button(
+        '项目主页 / 更新日志',
+        () => {
+          window.open(REPO_URL, '_blank', 'noopener');
+        },
+        { size: 'sm', variant: 'ghost' },
+      ),
+    );
+    about.append(aboutLinks);
+    container.append(about);
 
     const foot = h('div', 'foot');
     foot.append(
