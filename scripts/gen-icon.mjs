@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'assets');
+const STORE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'store');
 const SIZES = [16, 48, 128];
 const SUPER = 4;
 const BACKGROUND = [61, 126, 255];
@@ -125,3 +126,8 @@ for (const size of SIZES) {
   writeFileSync(file, render(size));
   console.log(`[icon] ${file}`);
 }
+
+mkdirSync(STORE_DIR, { recursive: true });
+const storeIcon = join(STORE_DIR, 'icon-300.png');
+writeFileSync(storeIcon, render(300));
+console.log(`[icon] ${storeIcon}`);

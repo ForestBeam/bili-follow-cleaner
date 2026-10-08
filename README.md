@@ -70,6 +70,8 @@ node scripts/gen-icon.mjs  # 重新生成图标
 
 文档：设计规格 `docs/superpowers/specs/`、实现计划 `docs/superpowers/plans/`、真机清单 [docs/e2e-checklist.md](docs/e2e-checklist.md)。
 
+商店上架材料（文案 / 审核说明 / 截图 / 提交清单）见 [store/](store/README.md)。
+
 ## 许可
 
 MIT，见 [LICENSE](LICENSE)。项目名称与图标不随代码许可授权，二次分发请更换名称与图标。
