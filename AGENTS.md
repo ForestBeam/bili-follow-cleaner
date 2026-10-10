@@ -13,13 +13,7 @@ Manifest V3 浏览器扩展（桌面版 Edge / Chrome），用于批量整理 B 
 | 本文件 | `AGENTS.md` | 协作约定与目录说明 |
 | 项目说明 | `README.md` | 功能、安装、使用、开发入口 |
 | 隐私声明 | `PRIVACY.md` | 数据流向与不收集承诺 |
-| 设计规格 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-design.md` | 架构、功能规格、验收清单 |
-| 设计规格 v1.1 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-v1.1-design.md` | 保护名单、最近关注排除、风控自动降速 |
-| 设计规格 v1.2 | `docs/superpowers/specs/2026-10-07-bili-follow-cleaner-v1.2-ux-design.md` | 交互修订：一键回关、搜索、控件闭环与文案 |
-| 设计规格 v1.3 | `docs/superpowers/specs/2026-10-08-bili-follow-cleaner-v1.3-growth-design.md` | 品牌统一与产品内增长位（页脚、报告卡、关于） |
-| 实现计划 | `docs/superpowers/plans/2026-10-07-bili-follow-cleaner-plan.md` | 里程碑与任务拆解 |
-| 真机清单 | `docs/e2e-checklist.md` | 上架前人工验证步骤 |
-| 上架材料 | `store/` | 商店文案、审核说明、标准尺寸截图与提交清单 |
+| 商店素材 | `store/` | 商店文案与标准尺寸截图（与商店页面公开内容一致） |
 
 ## 目录结构
 
@@ -48,7 +42,8 @@ node scripts/gen-icon.mjs  # 生成图标
 
 - 核心逻辑放 `src/core/`（纯函数、可单测）；DOM / chrome API 胶水放各入口文件
 - 改核心行为必须补/改 `tests/` 单测，保持 `npm test`、`npm run typecheck` 全绿
-- 改 manifest 权限、接口、目录结构时，同步更新 README、PRIVACY.md 与 docs/ 下文档
+- 改 manifest 权限、接口、目录结构时，同步更新 README 与 PRIVACY.md
+- 内部材料（设计规格、实现计划、真机清单、商店审核说明与提交清单）不入库，保存在仓库之外的私有目录
 - 对外文案不使用「哔哩哔哩 / B 站官方」字样与官方 logo，始终声明「非官方工具」
 - 不引入远程代码；wbi 映射表硬编码，平台变更时发新版本
 - 面板不得跳转或刷新当前页面（历史事故：跳转导致刷新循环）

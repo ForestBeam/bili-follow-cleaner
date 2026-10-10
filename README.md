@@ -70,9 +70,7 @@ node scripts/gen-icon.mjs  # 重新生成图标
 - `src/background/` service worker：图标点击、补注入、系统通知
 - `tests/` Vitest 单测
 
-文档：设计规格 `docs/superpowers/specs/`、实现计划 `docs/superpowers/plans/`、真机清单 [docs/e2e-checklist.md](docs/e2e-checklist.md)。
-
-商店上架材料（文案 / 审核说明 / 截图 / 提交清单）见 [store/](store/README.md)。
+商店文案与标准尺寸截图（与商店页面一致）见 [store/](store/)。
 
 ## 作者与反馈
 
