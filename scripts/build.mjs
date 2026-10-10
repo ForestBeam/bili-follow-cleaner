@@ -25,6 +25,9 @@ async function copyStatic() {
   if (existsSync('src/assets')) {
     await cp('src/assets', `${outdir}/assets`, { recursive: true });
   }
+  if (existsSync('src/_locales')) {
+    await cp('src/_locales', `${outdir}/_locales`, { recursive: true });
+  }
 }
 
 if (watch) {

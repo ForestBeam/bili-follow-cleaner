@@ -24,6 +24,7 @@ Manifest V3 浏览器扩展（桌面版 Edge / Chrome），用于批量整理 B 
 | `src/content-ui/` | 隔离世界：面板 UI、调度 controller、入口 wiring |
 | `src/background/` | service worker：图标点击、补注入、系统通知 |
 | `src/assets/` | 图标（由 `scripts/gen-icon.mjs` 生成） |
+| `src/_locales/` | manifest 名称与描述的多语言文案（`zh_CN` 默认 / `en`） |
 | `tests/` | Vitest 单测 |
 | `dist/` | 构建产物（商店上传的即此目录） |
 

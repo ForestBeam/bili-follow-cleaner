@@ -68,6 +68,7 @@ node scripts/gen-icon.mjs  # 重新生成图标
 - `src/content-main/` 页面世界（MAIN world）fetch 执行器
 - `src/content-ui/` 面板 UI、调度 controller、入口 wiring
 - `src/background/` service worker：图标点击、补注入、系统通知
+- `src/_locales/` manifest 名称与描述的多语言文案（`zh_CN` 默认 / `en`）
 - `tests/` Vitest 单测
 
 商店文案与标准尺寸截图（与商店页面一致）见 [store/](store/)。
